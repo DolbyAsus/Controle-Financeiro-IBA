@@ -310,3 +310,20 @@ export async function createIncomeEntry(formData: FormData) {
   } catch (error) { fail("/entradas", error); }
   redirect("/entradas?mensagem=Entrada+registrada+com+sucesso.");
 }
+
+export async function manageUserProfile(formData: FormData) {
+  try {
+    await currentProfile(["admin"]);
+    const supabase = await createClient();
+    const { error } = await supabase.rpc("manage_user_profile", {
+      target_user_id: readText(formData, "usuario_id", true),
+      target_role: readText(formData, "funcao", true),
+      target_status: readText(formData, "status", true),
+    });
+    const message = databaseMessage(error);
+    if (message) throw new Error(message);
+    revalidatePath("/usuarios");
+    revalidatePath("/historico");
+  } catch (error) { fail("/usuarios", error); }
+  redirect("/usuarios?mensagem=Perfil+atualizado+com+sucesso.");
+}

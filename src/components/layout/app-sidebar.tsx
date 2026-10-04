@@ -6,13 +6,13 @@ import { Church, Menu } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
 import { Sheet, SheetContent, SheetDescription, SheetHeader, SheetTitle, SheetTrigger } from "@/components/ui/sheet";
-import { primaryNavigation } from "@/lib/navigation";
+import { type UserRole, primaryNavigation } from "@/lib/navigation";
 import { cn } from "@/lib/utils";
 
-function NavigationLinks() {
+function NavigationLinks({ role }: { role?: UserRole }) {
   const pathname = usePathname();
   return <nav aria-label="Navegação principal" className="space-y-1 px-3 pb-4">
-    {primaryNavigation.map(({ href, icon: Icon, label }) => (
+    {primaryNavigation.filter((item) => !item.roles || !role || item.roles.includes(role)).map(({ href, icon: Icon, label }) => (
       <Link key={href} href={href} className={cn("flex min-h-10 items-center gap-3 rounded-lg px-3 text-sm font-medium transition-colors", pathname === href ? "bg-primary text-primary-foreground shadow-sm" : "text-muted-foreground hover:bg-muted hover:text-foreground")}>
         <Icon className="size-4" aria-hidden="true" />{label}
       </Link>
@@ -27,16 +27,16 @@ export function Brand() {
   </Link>;
 }
 
-export function DesktopSidebar() {
-  return <aside className="hidden min-h-screen w-68 shrink-0 border-r bg-card lg:block"><Brand /><NavigationLinks /></aside>;
+export function DesktopSidebar({ role }: { role?: UserRole }) {
+  return <aside className="hidden min-h-screen w-68 shrink-0 border-r bg-card lg:block"><Brand /><NavigationLinks role={role} /></aside>;
 }
 
-export function MobileSidebar() {
+export function MobileSidebar({ role }: { role?: UserRole }) {
   return <Sheet>
     <SheetTrigger render={<Button variant="ghost" size="icon" aria-label="Abrir menu" />}><Menu className="size-5" aria-hidden="true" /></SheetTrigger>
     <SheetContent side="left" className="w-[min(20rem,85vw)] p-0">
       <SheetHeader className="sr-only"><SheetTitle>Menu principal</SheetTitle><SheetDescription>Navegação do sistema financeiro.</SheetDescription></SheetHeader>
-      <Brand /><NavigationLinks />
+      <Brand /><NavigationLinks role={role} />
     </SheetContent>
   </Sheet>;
 }

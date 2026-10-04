@@ -169,3 +169,64 @@ export async function createSupplier(formData: FormData) {
   } catch (error) { fail("/fornecedores", error); }
   redirect("/fornecedores?mensagem=Fornecedor+cadastrado+com+sucesso.");
 }
+
+export async function createQuotation(formData: FormData) {
+  try {
+    const profile = await currentProfile(["admin", "financeiro", "aprovador"]);
+    const supabase = await createClient();
+    const totalValue = readNonNegativeNumber(formData, "valor_total");
+    if (!totalValue) throw new Error("Informe um valor total maior que zero.");
+    const quotationDate = readDate(formData, "data_cotacao");
+    const validUntil = readDate(formData, "validade_proposta");
+    if (quotationDate && validUntil && validUntil < quotationDate) throw new Error("A validade da proposta deve ser posterior à data da cotação.");
+    const { error } = await supabase.from("quotations").insert({
+      project_id: readText(formData, "projeto_id", true),
+      stage_id: readText(formData, "etapa_id", true),
+      category_id: readText(formData, "categoria_id", true),
+      title: readText(formData, "titulo", true),
+      description: readText(formData, "descricao"),
+      proponent_name: readText(formData, "proponente", true),
+      supplier_id: readText(formData, "fornecedor_id"),
+      proponent_phone: readText(formData, "telefone"),
+      proponent_email: readText(formData, "email"),
+      total_value: totalValue,
+      execution_deadline: readText(formData, "prazo_execucao"),
+      quotation_date: quotationDate,
+      proposal_valid_until: validUntil,
+      payment_method: readText(formData, "forma_pagamento"),
+      payment_terms: readText(formData, "condicoes_pagamento"),
+      included_scope: readText(formData, "escopo_incluso"),
+      excluded_scope: readText(formData, "escopo_excluso"),
+      warranty: readText(formData, "garantia"),
+      notes: readText(formData, "observacoes"),
+      drive_document_url: readText(formData, "link_drive"),
+      status: readText(formData, "status", true),
+      created_by: profile.id,
+      updated_by: profile.id,
+    });
+    const message = databaseMessage(error);
+    if (message) throw new Error(message);
+    revalidatePath("/cotacoes");
+    revalidatePath("/comparar-cotacoes");
+  } catch (error) { fail("/cotacoes", error); }
+  redirect("/cotacoes?mensagem=Cotação+cadastrada+com+sucesso.");
+}
+
+export async function approveQuotation(formData: FormData) {
+  try {
+    await currentProfile(["admin", "financeiro", "aprovador"]);
+    const quotationId = readText(formData, "cotacao_id", true);
+    const justification = readText(formData, "justificativa", true);
+    const supabase = await createClient();
+    const { error } = await supabase.rpc("approve_quotation", {
+      target_quotation_id: quotationId,
+      justification,
+    });
+    const message = databaseMessage(error);
+    if (message) throw new Error(message);
+    revalidatePath("/cotacoes");
+    revalidatePath("/comparar-cotacoes");
+    revalidatePath("/orcamentos");
+  } catch (error) { fail("/comparar-cotacoes", error); }
+  redirect("/comparar-cotacoes?mensagem=Cotação+aprovada+e+orçamento+gerado+com+sucesso.");
+}

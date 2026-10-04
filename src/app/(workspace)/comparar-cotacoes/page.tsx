@@ -1,3 +1,22 @@
 import { Scale } from "lucide-react";
-import { ModulePage } from "@/components/modules/module-page";
-export default function CompareQuotationsPage() { return <ModulePage title="Comparar cotações" description="Compare opções lado a lado; a escolha continua sendo uma decisão humana." icon={Scale} actionLabel="Selecionar filtros" />; }
+
+import { approveQuotation } from "@/lib/actions/base-registers";
+import { RegisterPageShell } from "@/components/modules/register-page-shell";
+import { Badge } from "@/components/ui/badge";
+import { Button } from "@/components/ui/button";
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
+import { isSupabaseConfigured } from "@/lib/supabase/config";
+import { createClient } from "@/lib/supabase/server";
+
+export const dynamic = "force-dynamic";
+const money = new Intl.NumberFormat("pt-BR", { style: "currency", currency: "BRL" });
+const statusLabel: Record<string, string> = { recebida: "Recebida", em_analise: "Em análise", aprovada_para_orcamento: "Aprovada", nao_selecionada: "Não selecionada", cancelada: "Cancelada", vencida: "Vencida" };
+
+export default async function CompareQuotationsPage({ searchParams }: { searchParams: Promise<{ mensagem?: string; erro?: string }> }) {
+  const query = await searchParams;
+  const quotations = isSupabaseConfigured() ? (await (await createClient()).from("quotations").select("id, title, proponent_name, total_value, execution_deadline, quotation_date, proposal_valid_until, payment_method, payment_terms, included_scope, excluded_scope, warranty, drive_document_url, status, projects(name), project_stages(name), categories(name)").in("status", ["recebida", "em_analise", "aprovada_para_orcamento"]).order("created_at", { ascending: false })).data ?? [] : [];
+
+  return <RegisterPageShell title="Comparar cotações" description="Consulte os dados lado a lado. O sistema não recomenda uma opção: a decisão é da comissão." icon={Scale} message={query.mensagem} error={query.erro} form={<p className="text-sm text-muted-foreground">Escolha uma proposta após analisar valor, escopo, prazo, pagamento e garantia. A aprovação exige justificativa e gera o orçamento automaticamente.</p>}>
+    {quotations.length === 0 ? <Card><CardContent className="py-10 text-sm text-muted-foreground">Não há cotações em análise para comparar.</CardContent></Card> : <div className="grid gap-4 xl:grid-cols-2">{quotations.map((item) => <Card key={item.id}><CardHeader><div className="flex items-start justify-between gap-3"><div><CardTitle>{item.title}</CardTitle><CardDescription>{item.projects?.[0]?.name || "Projeto"} · {item.project_stages?.[0]?.name || "Etapa"} · {item.categories?.[0]?.name || "Categoria"}</CardDescription></div><Badge variant="secondary">{statusLabel[item.status]}</Badge></div></CardHeader><CardContent className="space-y-4"><dl className="grid gap-3 text-sm sm:grid-cols-2"><div><dt className="text-muted-foreground">Proponente</dt><dd className="font-medium">{item.proponent_name}</dd></div><div><dt className="text-muted-foreground">Valor total</dt><dd className="font-medium">{money.format(Number(item.total_value))}</dd></div><div><dt className="text-muted-foreground">Prazo</dt><dd>{item.execution_deadline || "Não informado"}</dd></div><div><dt className="text-muted-foreground">Pagamento</dt><dd>{item.payment_method || "Não informado"}</dd></div><div><dt className="text-muted-foreground">Condições</dt><dd>{item.payment_terms || "Não informado"}</dd></div><div><dt className="text-muted-foreground">Garantia</dt><dd>{item.warranty || "Não informada"}</dd></div></dl><div className="space-y-2 text-sm"><p><span className="font-medium">Escopo incluso: </span>{item.included_scope || "Não informado"}</p><p><span className="font-medium">Escopo excluído: </span>{item.excluded_scope || "Não informado"}</p>{item.drive_document_url ? <a className="text-primary underline underline-offset-4" href={item.drive_document_url} target="_blank" rel="noreferrer">Abrir documento no Drive</a> : null}</div>{item.status !== "aprovada_para_orcamento" ? <form action={approveQuotation} className="space-y-2 border-t pt-4"><input name="cotacao_id" type="hidden" value={item.id} /><label className="grid gap-1.5 text-sm font-medium">Justificativa da escolha *<textarea className="min-h-20 rounded-lg border border-input bg-transparent p-3 text-sm" name="justificativa" required maxLength={2000} placeholder="Registre os critérios humanos que fundamentam a escolha." /></label><Button type="submit">Aprovar e gerar orçamento</Button></form> : <p className="rounded-lg bg-muted px-3 py-2 text-sm">Esta cotação já gerou um orçamento.</p>}</CardContent></Card>)}</div>}
+  </RegisterPageShell>;
+}

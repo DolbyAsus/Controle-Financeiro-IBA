@@ -1,0 +1,3 @@
+-- Dados adicionais de desenvolvimento podem ser incluídos aqui. A igreja e o
+-- projeto Colégio Batista fazem parte da migration inicial para também existir
+-- em ambientes remotos após `supabase db push`.

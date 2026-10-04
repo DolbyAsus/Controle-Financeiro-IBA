@@ -17,3 +17,14 @@ export function getSupabaseEnvironment() {
 
   return { url, key };
 }
+
+export function getAuthCallbackUrl() {
+  const configuredOrigin = process.env.NEXT_PUBLIC_SITE_URL?.trim();
+  const browserOrigin = typeof window === "undefined" ? undefined : window.location.origin;
+  const candidate = configuredOrigin || browserOrigin;
+  if (!candidate) throw new Error("Defina NEXT_PUBLIC_SITE_URL para os redirecionamentos de autenticação.");
+  const url = new URL(candidate);
+  const isLocalHttp = url.protocol === "http:" && (url.hostname === "localhost" || url.hostname === "127.0.0.1");
+  if (url.protocol !== "https:" && !isLocalHttp) throw new Error("A URL da aplicação precisa usar HTTPS.");
+  return `${url.origin}/auth/callback`;
+}

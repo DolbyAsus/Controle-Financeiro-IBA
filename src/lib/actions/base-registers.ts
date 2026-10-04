@@ -8,10 +8,28 @@ import { createClient } from "@/lib/supabase/server";
 
 type ProfileContext = { id: string; churchId: string; role: UserRole };
 
+const fieldLimits: Record<string, number> = {
+  nome: 160, tipo: 80, descricao: 2000, responsavel: 120, observacoes: 2000,
+  codigo: 30, titulo: 160, proponente: 160, telefone: 30, email: 160,
+  prazo_execucao: 160, forma_pagamento: 160, forma_recebimento: 160,
+  condicoes_pagamento: 500, escopo_incluso: 2000, escopo_excluso: 2000,
+  garantia: 500, link_drive: 1000, link_comprovante: 1000, documento: 40,
+  contato: 120, endereco: 500, origem: 160, destinatario_livre: 160,
+  justificativa: 2000, funcao: 20, status: 40, tipo_pessoa: 30,
+  projeto_id: 36, etapa_id: 36, categoria_id: 36, fornecedor_id: 36,
+  orcamento_id: 36, cotacao_id: 36, despesa_id: 36, usuario_id: 36,
+  categoria_principal_id: 36, ordem: 6, valor: 16, valor_total: 16,
+  orcamento_planejado: 16, data_inicio: 10, data_pagamento: 10,
+  data_recebimento: 10, data_cotacao: 10, validade_proposta: 10,
+  previsao_inicio: 10, previsao_termino: 10,
+};
+
 function readText(formData: FormData, field: string, required = false) {
   const value = formData.get(field);
   const text = typeof value === "string" ? value.trim() : "";
   if (required && !text) throw new Error(`Preencha o campo ${field}.`);
+  const maxLength = fieldLimits[field] ?? 2000;
+  if (text.length > maxLength) throw new Error(`O campo ${field} aceita no máximo ${maxLength} caracteres.`);
   return text || null;
 }
 
@@ -32,7 +50,8 @@ function readGoogleDriveUrl(formData: FormData, field: string) {
 
 function readDate(formData: FormData, field: string) {
   const value = readText(formData, field);
-  if (value && !/^\d{4}-\d{2}-\d{2}$/.test(value)) throw new Error("Informe uma data válida.");
+  const parsedDate = value ? new Date(`${value}T12:00:00Z`) : null;
+  if (value && (!/^\d{4}-\d{2}-\d{2}$/.test(value) || Number.isNaN(parsedDate!.getTime()) || parsedDate!.toISOString().slice(0, 10) !== value)) throw new Error("Informe uma data válida.");
   return value;
 }
 
@@ -40,7 +59,7 @@ function readNonNegativeNumber(formData: FormData, field: string) {
   const value = readText(formData, field);
   if (!value) return null;
   const number = Number(value.replace(",", "."));
-  if (!Number.isFinite(number) || number < 0) throw new Error("Informe um valor numérico igual ou maior que zero.");
+  if (!Number.isFinite(number) || number < 0 || number > 999_999_999_999.99) throw new Error("Informe um valor numérico entre zero e 999.999.999.999,99.");
   return number;
 }
 

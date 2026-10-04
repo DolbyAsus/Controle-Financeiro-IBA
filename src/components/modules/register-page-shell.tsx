@@ -15,6 +15,8 @@ type Props = {
 };
 
 export function RegisterPageShell({ title, description, icon: Icon, form, children, message, error }: Props) {
+  const safeMessage = message?.slice(0, 500);
+  const safeError = error?.slice(0, 500);
   return (
     <div className="space-y-6">
       <section>
@@ -22,8 +24,8 @@ export function RegisterPageShell({ title, description, icon: Icon, form, childr
         <h1 className="mt-1 text-2xl font-semibold tracking-tight sm:text-3xl">{title}</h1>
         <p className="mt-1 max-w-2xl text-sm text-muted-foreground">{description}</p>
       </section>
-      {message ? <p role="status" className="flex items-center gap-2 rounded-lg border border-emerald-200 bg-emerald-50 px-3 py-2 text-sm text-emerald-800"><CircleCheck className="size-4" />{message}</p> : null}
-      {error ? <p role="alert" className="flex items-center gap-2 rounded-lg border border-destructive/25 bg-destructive/10 px-3 py-2 text-sm text-destructive"><CircleAlert className="size-4" />{error}</p> : null}
+      {safeMessage ? <p role="status" className="flex break-words gap-2 rounded-lg border border-emerald-200 bg-emerald-50 px-3 py-2 text-sm text-emerald-800"><CircleCheck className="size-4 shrink-0" />{safeMessage}</p> : null}
+      {safeError ? <p role="alert" className="flex break-words gap-2 rounded-lg border border-destructive/25 bg-destructive/10 px-3 py-2 text-sm text-destructive"><CircleAlert className="size-4 shrink-0" />{safeError}</p> : null}
       <Card>
         <CardHeader><CardTitle className="flex items-center gap-2"><Icon className="size-5 text-primary" />Novo registro</CardTitle><CardDescription>Campos marcados com * são obrigatórios.</CardDescription></CardHeader>
         <CardContent>{form}</CardContent>

@@ -280,3 +280,33 @@ export async function registerPayment(formData: FormData) {
   } catch (error) { fail("/pagamentos", error); }
   redirect("/pagamentos?mensagem=Pagamento+registrado+com+sucesso.");
 }
+
+export async function createIncomeEntry(formData: FormData) {
+  try {
+    const profile = await currentProfile(["admin", "financeiro"]);
+    const amount = readNonNegativeNumber(formData, "valor");
+    if (!amount) throw new Error("Informe um valor recebido maior que zero.");
+    const receivedDate = readDate(formData, "data_recebimento");
+    if (!receivedDate) throw new Error("Informe a data do recebimento.");
+    const supabase = await createClient();
+    const { error } = await supabase.from("income_entries").insert({
+      project_id: readText(formData, "projeto_id", true),
+      category_id: readText(formData, "categoria_id"),
+      received_date: receivedDate,
+      amount,
+      origin: readText(formData, "origem", true),
+      description: readText(formData, "descricao"),
+      payment_method: readText(formData, "forma_recebimento"),
+      drive_receipt_url: readText(formData, "link_comprovante"),
+      status: "recebida",
+      registered_by: profile.id,
+      notes: readText(formData, "observacoes"),
+    });
+    const message = databaseMessage(error);
+    if (message) throw new Error(message);
+    revalidatePath("/entradas");
+    revalidatePath("/dashboard");
+    revalidatePath("/relatorio-mensal");
+  } catch (error) { fail("/entradas", error); }
+  redirect("/entradas?mensagem=Entrada+registrada+com+sucesso.");
+}

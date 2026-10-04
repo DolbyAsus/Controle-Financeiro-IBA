@@ -15,6 +15,21 @@ function readText(formData: FormData, field: string, required = false) {
   return text || null;
 }
 
+function readGoogleDriveUrl(formData: FormData, field: string) {
+  const value = readText(formData, field);
+  if (!value) return null;
+
+  try {
+    const url = new URL(value);
+    if (url.protocol !== "https:" || !["drive.google.com", "docs.google.com"].includes(url.hostname)) {
+      throw new Error();
+    }
+    return url.toString();
+  } catch {
+    throw new Error("Use apenas links HTTPS do Google Drive.");
+  }
+}
+
 function readDate(formData: FormData, field: string) {
   const value = readText(formData, field);
   if (value && !/^\d{4}-\d{2}-\d{2}$/.test(value)) throw new Error("Informe uma data válida.");
@@ -54,6 +69,7 @@ async function currentProfile(roles: UserRole[]): Promise<ProfileContext> {
 function databaseMessage(error: { message?: string } | null) {
   if (!error) return null;
   if (error.message?.includes("duplicate key")) return "Já existe um registro com estes dados.";
+  if (error.message?.includes("Use apenas links HTTPS do Google Drive")) return "Use apenas links HTTPS do Google Drive.";
   return "Não foi possível salvar o registro. Verifique os dados e tente novamente.";
 }
 
@@ -172,7 +188,7 @@ export async function createSupplier(formData: FormData) {
 
 export async function createQuotation(formData: FormData) {
   try {
-    const profile = await currentProfile(["admin", "financeiro", "aprovador"]);
+    await currentProfile(["admin", "financeiro", "aprovador"]);
     const supabase = await createClient();
     const totalValue = readNonNegativeNumber(formData, "valor_total");
     if (!totalValue) throw new Error("Informe um valor total maior que zero.");
@@ -199,10 +215,8 @@ export async function createQuotation(formData: FormData) {
       excluded_scope: readText(formData, "escopo_excluso"),
       warranty: readText(formData, "garantia"),
       notes: readText(formData, "observacoes"),
-      drive_document_url: readText(formData, "link_drive"),
+      drive_document_url: readGoogleDriveUrl(formData, "link_drive"),
       status: readText(formData, "status", true),
-      created_by: profile.id,
-      updated_by: profile.id,
     });
     const message = databaseMessage(error);
     if (message) throw new Error(message);
@@ -271,7 +285,7 @@ export async function registerPayment(formData: FormData) {
     const supabase = await createClient();
     const { error } = await supabase.rpc("register_payment", {
       target_expense_id: readText(formData, "despesa_id", true), target_amount: amount, target_payment_date: paymentDate,
-      target_payment_method: readText(formData, "forma_pagamento"), receipt_url: readText(formData, "link_comprovante"), payment_notes: readText(formData, "observacoes"),
+      target_payment_method: readText(formData, "forma_pagamento"), receipt_url: readGoogleDriveUrl(formData, "link_comprovante"), payment_notes: readText(formData, "observacoes"),
     });
     const message = databaseMessage(error);
     if (message) throw new Error(message);
@@ -297,7 +311,7 @@ export async function createIncomeEntry(formData: FormData) {
       origin: readText(formData, "origem", true),
       description: readText(formData, "descricao"),
       payment_method: readText(formData, "forma_recebimento"),
-      drive_receipt_url: readText(formData, "link_comprovante"),
+      drive_receipt_url: readGoogleDriveUrl(formData, "link_comprovante"),
       status: "recebida",
       registered_by: profile.id,
       notes: readText(formData, "observacoes"),
@@ -400,18 +414,14 @@ export async function updateSupplier(formData: FormData) {
 
 export async function finishQuotation(formData: FormData) {
   try {
-    const profile = await currentProfile(["admin", "financeiro", "aprovador"]);
+    await currentProfile(["admin", "financeiro", "aprovador"]);
     const quotationId = readText(formData, "cotacao_id", true);
     const status = readText(formData, "status", true)!;
     const justification = readText(formData, "justificativa", true);
     if (!["nao_selecionada", "cancelada"].includes(status)) throw new Error("Status de cotação inválido.");
     const supabase = await createClient();
-    const { data: quotation, error: readError } = await supabase.from("quotations").select("notes, status").eq("id", quotationId).maybeSingle();
-    if (readError || !quotation) throw new Error("Cotação não encontrada ou sem permissão.");
-    if (!["recebida", "em_analise"].includes(quotation.status)) throw new Error("Apenas cotações em análise podem ser encerradas.");
-    await ensureUpdated(supabase.from("quotations").update({
-      status, notes: [quotation.notes, `${status === "cancelada" ? "Cancelamento" : "Não selecionada"}: ${justification}`].filter(Boolean).join("\n"), updated_by: profile.id,
-    }).eq("id", quotationId).in("status", ["recebida", "em_analise"]).select("id"));
+    const { error } = await supabase.rpc("finish_quotation", { target_quotation_id: quotationId, target_status: status, justification });
+    const message = databaseMessage(error); if (message) throw new Error(message);
     revalidatePath("/cotacoes"); revalidatePath("/comparar-cotacoes"); revalidatePath("/historico");
   } catch (error) { fail("/cotacoes", error); }
   redirect("/cotacoes?mensagem=Cotação+encerrada+e+histórico+registrado.");

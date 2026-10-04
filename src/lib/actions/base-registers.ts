@@ -327,3 +327,104 @@ export async function manageUserProfile(formData: FormData) {
   } catch (error) { fail("/usuarios", error); }
   redirect("/usuarios?mensagem=Perfil+atualizado+com+sucesso.");
 }
+
+async function ensureUpdated(
+  request: PromiseLike<{ data: { id: string }[] | null; error: { message?: string } | null }>,
+) {
+  const { data, error } = await request;
+  const message = databaseMessage(error);
+  if (message) throw new Error(message);
+  if (!data?.length) throw new Error("Registro não encontrado ou sem permissão para alterá-lo.");
+}
+
+export async function updateProject(formData: FormData) {
+  try {
+    const profile = await currentProfile(["admin"]);
+    const startDate = readDate(formData, "data_inicio");
+    const endDate = readDate(formData, "previsao_termino");
+    if (startDate && endDate && endDate < startDate) throw new Error("A previsão de término deve ser posterior ao início.");
+    const supabase = await createClient();
+    await ensureUpdated(supabase.from("projects").update({
+      name: readText(formData, "nome", true), project_type: readText(formData, "tipo"), description: readText(formData, "descricao"),
+      start_date: startDate, expected_end_date: endDate, main_responsible: readText(formData, "responsavel"),
+      status: readText(formData, "status", true), notes: readText(formData, "observacoes"), updated_by: profile.id,
+    }).eq("id", readText(formData, "projeto_id", true)).select("id"));
+    revalidatePath("/projetos"); revalidatePath("/dashboard"); revalidatePath("/relatorio-mensal"); revalidatePath("/historico");
+  } catch (error) { fail("/projetos", error); }
+  redirect("/projetos?mensagem=Projeto+atualizado+com+sucesso.");
+}
+
+export async function updateStage(formData: FormData) {
+  try {
+    const profile = await currentProfile(["admin", "financeiro"]);
+    const startDate = readDate(formData, "previsao_inicio"); const endDate = readDate(formData, "previsao_termino");
+    if (startDate && endDate && endDate < startDate) throw new Error("A previsão de término deve ser posterior ao início.");
+    const order = Number(readText(formData, "ordem", true));
+    if (!Number.isInteger(order) || order < 0) throw new Error("A ordem deve ser um número inteiro positivo.");
+    const plannedBudget = readNonNegativeNumber(formData, "orcamento_planejado");
+    if (plannedBudget === null) throw new Error("Informe o orçamento planejado.");
+    const supabase = await createClient();
+    await ensureUpdated(supabase.from("project_stages").update({
+      name: readText(formData, "nome", true), code: readText(formData, "codigo"), description: readText(formData, "descricao"),
+      sort_order: order, planned_budget: plannedBudget, expected_start_date: startDate, expected_end_date: endDate,
+      status: readText(formData, "status", true), notes: readText(formData, "observacoes"), updated_by: profile.id,
+    }).eq("id", readText(formData, "etapa_id", true)).select("id"));
+    revalidatePath("/etapas"); revalidatePath("/dashboard"); revalidatePath("/relatorio-mensal"); revalidatePath("/historico");
+  } catch (error) { fail("/etapas", error); }
+  redirect("/etapas?mensagem=Etapa+atualizada+com+sucesso.");
+}
+
+export async function updateCategory(formData: FormData) {
+  try {
+    const profile = await currentProfile(["admin", "financeiro"]); const supabase = await createClient();
+    await ensureUpdated(supabase.from("categories").update({
+      name: readText(formData, "nome", true), type: readText(formData, "tipo", true), description: readText(formData, "descricao"),
+      status: readText(formData, "status", true), updated_by: profile.id,
+    }).eq("id", readText(formData, "categoria_id", true)).select("id"));
+    revalidatePath("/categorias"); revalidatePath("/historico");
+  } catch (error) { fail("/categorias", error); }
+  redirect("/categorias?mensagem=Categoria+atualizada+com+sucesso.");
+}
+
+export async function updateSupplier(formData: FormData) {
+  try {
+    const profile = await currentProfile(["admin", "financeiro"]); const supabase = await createClient();
+    await ensureUpdated(supabase.from("suppliers").update({
+      name: readText(formData, "nome", true), main_contact: readText(formData, "contato"), phone: readText(formData, "telefone"),
+      email: readText(formData, "email"), status: readText(formData, "status", true), notes: readText(formData, "observacoes"), updated_by: profile.id,
+    }).eq("id", readText(formData, "fornecedor_id", true)).select("id"));
+    revalidatePath("/fornecedores"); revalidatePath("/historico");
+  } catch (error) { fail("/fornecedores", error); }
+  redirect("/fornecedores?mensagem=Fornecedor+atualizado+com+sucesso.");
+}
+
+export async function finishQuotation(formData: FormData) {
+  try {
+    const profile = await currentProfile(["admin", "financeiro", "aprovador"]);
+    const quotationId = readText(formData, "cotacao_id", true);
+    const status = readText(formData, "status", true)!;
+    const justification = readText(formData, "justificativa", true);
+    if (!["nao_selecionada", "cancelada"].includes(status)) throw new Error("Status de cotação inválido.");
+    const supabase = await createClient();
+    const { data: quotation, error: readError } = await supabase.from("quotations").select("notes, status").eq("id", quotationId).maybeSingle();
+    if (readError || !quotation) throw new Error("Cotação não encontrada ou sem permissão.");
+    if (!["recebida", "em_analise"].includes(quotation.status)) throw new Error("Apenas cotações em análise podem ser encerradas.");
+    await ensureUpdated(supabase.from("quotations").update({
+      status, notes: [quotation.notes, `${status === "cancelada" ? "Cancelamento" : "Não selecionada"}: ${justification}`].filter(Boolean).join("\n"), updated_by: profile.id,
+    }).eq("id", quotationId).in("status", ["recebida", "em_analise"]).select("id"));
+    revalidatePath("/cotacoes"); revalidatePath("/comparar-cotacoes"); revalidatePath("/historico");
+  } catch (error) { fail("/cotacoes", error); }
+  redirect("/cotacoes?mensagem=Cotação+encerrada+e+histórico+registrado.");
+}
+
+export async function cancelExpense(formData: FormData) {
+  try {
+    await currentProfile(["admin", "financeiro"]); const supabase = await createClient();
+    const { error } = await supabase.rpc("cancel_expense", {
+      target_expense_id: readText(formData, "despesa_id", true), justification: readText(formData, "justificativa", true),
+    });
+    const message = databaseMessage(error); if (message) throw new Error(message);
+    revalidatePath("/despesas"); revalidatePath("/dashboard"); revalidatePath("/relatorio-mensal"); revalidatePath("/historico");
+  } catch (error) { fail("/despesas", error); }
+  redirect("/despesas?mensagem=Despesa+cancelada+e+histórico+registrado.");
+}

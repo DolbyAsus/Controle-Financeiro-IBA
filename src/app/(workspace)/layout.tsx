@@ -3,6 +3,7 @@ import { redirect } from "next/navigation";
 
 import { AppShell } from "@/components/layout/app-shell";
 import type { UserRole } from "@/lib/navigation";
+import { getOperationalNotifications } from "@/lib/notifications";
 import { isSupabaseConfigured } from "@/lib/supabase/config";
 import { createClient } from "@/lib/supabase/server";
 
@@ -19,5 +20,6 @@ export default async function WorkspaceLayout({ children }: { children: ReactNod
     .eq("id", data.claims.sub)
     .maybeSingle();
   if (!profile || profile.status !== "ativo") redirect("/login");
-  return <AppShell userEmail={profile.email} role={profile.role as UserRole}>{children}</AppShell>;
+  const notifications = await getOperationalNotifications(profile.role as UserRole);
+  return <AppShell userEmail={profile.email} role={profile.role as UserRole} notificationCount={notifications.length}>{children}</AppShell>;
 }

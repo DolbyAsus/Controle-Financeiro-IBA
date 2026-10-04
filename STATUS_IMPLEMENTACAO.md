@@ -18,6 +18,9 @@ sequência, salvo mudança de prioridade da Igreja Batista da Aliança.
 - Revisão de segurança aplicada: cadastro público bloqueado, perfis restritos,
   transições financeiras protegidas por funções/gatilhos e links limitados ao
   Google Drive via HTTPS.
+- Filtros de projeto e competência no dashboard e relatório mensal, comparação
+  filtrável de cotações e encerramento seguro da sessão.
+- Central de notificações internas por perfil, sem integração ou envio externo.
 
 ## Próximas etapas priorizadas
 
@@ -37,6 +40,6 @@ sequência, salvo mudança de prioridade da Igreja Batista da Aliança.
 
 ## Próxima sugestão ativa
 
-**Etapa 1 — testes de segurança e perfis.** Validar acesso por papel, bloqueio
-de cadastro público, transições de cotação, pagamentos parciais e links do
-Google Drive antes de cadastrar dados financeiros reais.
+**Implementação funcional concluída. Etapa 1 — testes de segurança e perfis.**
+Validar acesso por papel, bloqueio de cadastro público, transições de cotação,
+pagamentos parciais e links do Google Drive antes de cadastrar dados reais.

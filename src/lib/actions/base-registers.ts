@@ -230,3 +230,53 @@ export async function approveQuotation(formData: FormData) {
   } catch (error) { fail("/comparar-cotacoes", error); }
   redirect("/comparar-cotacoes?mensagem=Cotação+aprovada+e+orçamento+gerado+com+sucesso.");
 }
+
+export async function resolveBudgetRecipient(formData: FormData) {
+  try {
+    await currentProfile(["admin", "financeiro"]);
+    const budgetId = readText(formData, "orcamento_id", true);
+    const supplierId = readText(formData, "fornecedor_id");
+    const recipient = readText(formData, "destinatario_livre");
+    if (!supplierId && !recipient) throw new Error("Informe um fornecedor ou destinatário livre.");
+    const supabase = await createClient();
+    const { error } = await supabase.rpc("resolve_budget_recipient", { target_budget_id: budgetId, target_supplier_id: supplierId, recipient });
+    const message = databaseMessage(error);
+    if (message) throw new Error(message);
+    revalidatePath("/orcamentos");
+  } catch (error) { fail("/orcamentos", error); }
+  redirect("/orcamentos?mensagem=Destinatário+definido.+O+orçamento+está+pronto+para+aprovação.");
+}
+
+export async function approveBudgetAsExpense(formData: FormData) {
+  try {
+    await currentProfile(["admin", "financeiro"]);
+    const supabase = await createClient();
+    const { error } = await supabase.rpc("approve_budget_as_expense", { target_budget_id: readText(formData, "orcamento_id", true) });
+    const message = databaseMessage(error);
+    if (message) throw new Error(message);
+    revalidatePath("/orcamentos");
+    revalidatePath("/despesas");
+    revalidatePath("/pagamentos");
+  } catch (error) { fail("/orcamentos", error); }
+  redirect("/orcamentos?mensagem=Orçamento+aprovado+e+despesa+criada+com+sucesso.");
+}
+
+export async function registerPayment(formData: FormData) {
+  try {
+    await currentProfile(["admin", "financeiro"]);
+    const amount = readNonNegativeNumber(formData, "valor");
+    if (!amount) throw new Error("Informe um valor de pagamento maior que zero.");
+    const paymentDate = readDate(formData, "data_pagamento");
+    if (!paymentDate) throw new Error("Informe a data do pagamento.");
+    const supabase = await createClient();
+    const { error } = await supabase.rpc("register_payment", {
+      target_expense_id: readText(formData, "despesa_id", true), target_amount: amount, target_payment_date: paymentDate,
+      target_payment_method: readText(formData, "forma_pagamento"), receipt_url: readText(formData, "link_comprovante"), payment_notes: readText(formData, "observacoes"),
+    });
+    const message = databaseMessage(error);
+    if (message) throw new Error(message);
+    revalidatePath("/despesas");
+    revalidatePath("/pagamentos");
+  } catch (error) { fail("/pagamentos", error); }
+  redirect("/pagamentos?mensagem=Pagamento+registrado+com+sucesso.");
+}

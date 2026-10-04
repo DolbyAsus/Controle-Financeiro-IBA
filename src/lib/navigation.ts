@@ -1,5 +1,5 @@
 import {
-  BarChart3, Building2, ClipboardList, CreditCard, FileBarChart,
+  BarChart3, Building2, ClipboardList, CreditCard, FileBarChart, History,
   FolderKanban, Landmark, ReceiptText, Tags, Users, WalletCards,
   type LucideIcon,
 } from "lucide-react";
@@ -20,5 +20,6 @@ export const primaryNavigation: NavigationItem[] = [
   { href: "/pagamentos", label: "Pagamentos", icon: CreditCard },
   { href: "/entradas", label: "Entradas", icon: WalletCards },
   { href: "/relatorio-mensal", label: "Relatório mensal", icon: FileBarChart },
+  { href: "/historico", label: "Histórico", icon: History, roles: ["admin", "financeiro"] },
   { href: "/usuarios", label: "Usuários", icon: Users, roles: ["admin"] },
 ];

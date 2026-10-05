@@ -20,7 +20,7 @@ const fieldLimits: Record<string, number> = {
   orcamento_id: 36, cotacao_id: 36, despesa_id: 36, usuario_id: 36,
   categoria_principal_id: 36, ordem: 6, valor: 16, valor_total: 16,
   orcamento_planejado: 16, data_inicio: 10, data_pagamento: 10,
-  data_recebimento: 10, data_cotacao: 10, validade_proposta: 10,
+  data_recebimento: 10, data_prevista: 10, data_cotacao: 10, validade_proposta: 10,
   previsao_inicio: 10, previsao_termino: 10,
 };
 
@@ -89,6 +89,23 @@ function databaseMessage(error: { message?: string } | null) {
   if (!error) return null;
   if (error.message?.includes("duplicate key")) return "Já existe um registro com estes dados.";
   if (error.message?.includes("Use apenas links HTTPS do Google Drive")) return "Use apenas links HTTPS do Google Drive.";
+  const safeDatabaseMessages = [
+    "Informe um fornecedor ou destinatário livre",
+    "Escolha somente um fornecedor ou destinatário livre",
+    "Fornecedor inválido",
+    "Orçamento não encontrado",
+    "O orçamento não possui fornecedor pendente",
+    "Despesa não encontrada",
+    "Não é possível registrar pagamento para esta despesa",
+    "O pagamento não pode ser maior que o saldo da despesa",
+    "Projeto não encontrado",
+    "A descrição da despesa é obrigatória",
+    "Informe um valor de despesa maior que zero",
+    "A etapa precisa estar ativa e pertencer ao projeto informado",
+    "A categoria precisa estar ativa, pertencer ao projeto e aceitar saídas",
+    "Fornecedor inválido ou inativo",
+  ];
+  if (safeDatabaseMessages.some((message) => error.message?.includes(message))) return error.message;
   return "Não foi possível salvar o registro. Verifique os dados e tente novamente.";
 }
 
@@ -290,8 +307,46 @@ export async function approveBudgetAsExpense(formData: FormData) {
     revalidatePath("/orcamentos");
     revalidatePath("/despesas");
     revalidatePath("/pagamentos");
+    revalidatePath("/dashboard");
+    revalidatePath("/relatorio-mensal");
+    revalidatePath("/historico");
   } catch (error) { fail("/orcamentos", error); }
   redirect("/orcamentos?mensagem=Orçamento+aprovado+e+despesa+criada+com+sucesso.");
+}
+
+export async function createManualExpense(formData: FormData) {
+  try {
+    await currentProfile(["admin", "financeiro"]);
+    const supplierId = readText(formData, "fornecedor_id");
+    const recipient = readText(formData, "destinatario_livre");
+    if (!supplierId && !recipient) throw new Error("Informe um fornecedor ou destinatário livre.");
+    if (supplierId && recipient) throw new Error("Escolha somente um fornecedor ou destinatário livre.");
+
+    const value = readNonNegativeNumber(formData, "valor");
+    if (!value) throw new Error("Informe um valor de despesa maior que zero.");
+
+    const supabase = await createClient();
+    const { error } = await supabase.rpc("create_manual_expense", {
+      target_project_id: readText(formData, "projeto_id", true),
+      target_stage_id: readText(formData, "etapa_id", true),
+      target_category_id: readText(formData, "categoria_id", true),
+      target_supplier_id: supplierId,
+      recipient,
+      target_description: readText(formData, "descricao", true),
+      target_value: value,
+      target_expected_date: readDate(formData, "data_prevista"),
+      document_url: readGoogleDriveUrl(formData, "link_drive"),
+      expense_notes: readText(formData, "observacoes"),
+    });
+    const message = databaseMessage(error);
+    if (message) throw new Error(message);
+    revalidatePath("/despesas");
+    revalidatePath("/pagamentos");
+    revalidatePath("/dashboard");
+    revalidatePath("/relatorio-mensal");
+    revalidatePath("/historico");
+  } catch (error) { fail("/despesas", error); }
+  redirect("/despesas?mensagem=Despesa+manual+cadastrada+com+sucesso.");
 }
 
 export async function registerPayment(formData: FormData) {
@@ -310,6 +365,9 @@ export async function registerPayment(formData: FormData) {
     if (message) throw new Error(message);
     revalidatePath("/despesas");
     revalidatePath("/pagamentos");
+    revalidatePath("/dashboard");
+    revalidatePath("/relatorio-mensal");
+    revalidatePath("/historico");
   } catch (error) { fail("/pagamentos", error); }
   redirect("/pagamentos?mensagem=Pagamento+registrado+com+sucesso.");
 }

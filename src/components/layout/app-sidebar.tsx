@@ -2,8 +2,9 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { Church, Menu } from "lucide-react";
+import { Menu } from "lucide-react";
 
+import { BrandSpectrum, IbaMark } from "@/components/brand/iba-logo";
 import { Button } from "@/components/ui/button";
 import { Sheet, SheetContent, SheetDescription, SheetHeader, SheetTitle, SheetTrigger } from "@/components/ui/sheet";
 import { type UserRole, primaryNavigation } from "@/lib/navigation";
@@ -21,14 +22,14 @@ function NavigationLinks({ role }: { role?: UserRole }) {
 }
 
 export function Brand() {
-  return <Link href="/dashboard" className="flex items-center gap-3 px-5 py-5">
-    <span className="grid size-9 place-items-center rounded-xl bg-primary text-primary-foreground shadow-sm"><Church className="size-5" aria-hidden="true" /></span>
-    <span className="min-w-0"><span className="block truncate text-sm font-semibold">Gestão de Projetos</span><span className="block truncate text-xs text-muted-foreground">Igreja Batista da Aliança</span></span>
+  return <Link href="/dashboard" className="flex items-center gap-3 px-5 py-4 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2">
+    <IbaMark />
+    <span className="min-w-0"><span className="block truncate text-sm font-semibold">Gestão Financeira</span><span className="block truncate text-xs text-muted-foreground">Igreja Batista da Aliança</span></span>
   </Link>;
 }
 
 export function DesktopSidebar({ role }: { role?: UserRole }) {
-  return <aside className="hidden min-h-screen w-68 shrink-0 border-r bg-card lg:block"><Brand /><NavigationLinks role={role} /></aside>;
+  return <aside className="hidden min-h-screen w-68 shrink-0 border-r bg-sidebar lg:block"><BrandSpectrum className="h-1" /><Brand /><NavigationLinks role={role} /></aside>;
 }
 
 export function MobileSidebar({ role }: { role?: UserRole }) {
@@ -36,7 +37,7 @@ export function MobileSidebar({ role }: { role?: UserRole }) {
     <SheetTrigger render={<Button variant="ghost" size="icon" aria-label="Abrir menu" />}><Menu className="size-5" aria-hidden="true" /></SheetTrigger>
     <SheetContent side="left" className="w-[min(20rem,85vw)] p-0">
       <SheetHeader className="sr-only"><SheetTitle>Menu principal</SheetTitle><SheetDescription>Navegação do sistema financeiro.</SheetDescription></SheetHeader>
-      <Brand /><NavigationLinks role={role} />
+      <BrandSpectrum className="h-1" /><Brand /><NavigationLinks role={role} />
     </SheetContent>
   </Sheet>;
 }

@@ -16,6 +16,9 @@ const geistMono = Geist_Mono({
 export const metadata: Metadata = {
   title: "Gestão Financeira | Igreja Batista da Aliança",
   description: "Gestão financeira de projetos da Igreja Batista da Aliança.",
+  icons: {
+    icon: "/brand/iba-color.webp",
+  },
 };
 
 export default function RootLayout({ children }: { children: ReactNode }) {

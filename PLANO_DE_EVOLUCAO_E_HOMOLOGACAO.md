@@ -11,7 +11,8 @@ continua sendo de uma única igreja, com múltiplos projetos independentes.
 - Perfis e RLS: Administrador, Financeiro, Aprovador e Visualizador.
 - Cadastros: projetos, etapas, categorias e fornecedores.
 - Fluxo de saída: cotação, comparação humana, justificativa, orçamento,
-  aprovação financeira, despesa e pagamentos parciais.
+  aprovação financeira, despesa e pagamentos parciais; despesas também podem
+  ser registradas manualmente, sempre com destinatário definido.
 - Fluxo de entrada: entrada direta, dashboard e relatório mensal.
 - Histórico/auditoria, notificações internas e responsividade base.
 - Segurança: RLS, transições protegidas, limites de entrada, CSP, cabeçalhos
@@ -40,8 +41,10 @@ Objetivo: validar permissões e regras com contas de cada papel.
 1. Administrador cria projeto, etapa, categoria, fornecedor e usuário.
 2. Aprovador registra e compara cotações, sem recomendação automática.
 3. Aprovar uma cotação com justificativa e confirmar a geração do orçamento.
-4. Financeiro/Admin aprova orçamento e cria despesa.
-5. Registrar pagamento parcial, pagamento final e conferir os saldos.
+4. Financeiro/Admin aprova orçamento e cria despesa, ou registra uma despesa
+   manual com projeto, etapa, categoria e destinatário.
+5. Registrar pagamento parcial, pagamento final e conferir os saldos e o
+   destinatário exibido em cada parcela.
 6. Registrar entrada e conferir dashboard e relatório mensal.
 7. Testar bloqueios: Visualizador não altera dados; Aprovador não aprova
    despesa; orçamento sem fornecedor/destinatário não vira despesa.

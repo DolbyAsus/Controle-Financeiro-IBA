@@ -1,6 +1,6 @@
 # Status de implementação — Gestão Financeira de Projetos
 
-Atualizado em 04/10/2026. Este arquivo é o checkpoint de execução do MVP.
+Atualizado em 05/10/2026. Este arquivo é o checkpoint de execução do MVP.
 Ao concluir uma etapa, registrar a evidência e iniciar a etapa sugerida na
 sequência, salvo mudança de prioridade da Igreja Batista da Aliança.
 
@@ -11,7 +11,8 @@ sequência, salvo mudança de prioridade da Igreja Batista da Aliança.
 - Autenticação por Supabase, layout responsivo e navegação por perfil.
 - Cadastro e listagem de projetos, etapas, categorias e fornecedores.
 - Cotações, comparação humana, justificativa e geração de orçamento.
-- Definição de destinatário, aprovação financeira, despesas e pagamentos parciais.
+- Definição de destinatário, aprovação financeira, despesas originadas de
+  orçamento ou lançamento manual e pagamentos parciais vinculados à despesa.
 - Entradas, dashboard, relatório mensal visual e histórico de auditoria.
 - Primeiro Administrador confirmado, com acesso ativo à produção.
 - Produção publicada no domínio oficial da Vercel, integrada ao GitHub.
@@ -42,4 +43,5 @@ sequência, salvo mudança de prioridade da Igreja Batista da Aliança.
 
 **Implementação funcional concluída. Etapa 1 — testes de segurança e perfis.**
 Validar acesso por papel, bloqueio de cadastro público, transições de cotação,
-pagamentos parciais e links do Google Drive antes de cadastrar dados reais.
+despesas manuais, pagamentos parciais e links do Google Drive antes de
+cadastrar dados reais.

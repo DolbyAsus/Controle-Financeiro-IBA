@@ -17,7 +17,7 @@ import {
 import { Input } from "@/components/ui/input";
 import { createClient } from "@/lib/supabase/client";
 import {
-  getAuthCallbackUrl,
+  getPasswordRecoveryUrl,
   isSupabaseConfigured,
 } from "@/lib/supabase/config";
 
@@ -39,7 +39,7 @@ export default function RecoverPasswordPage() {
     setError(null);
     const { error: recoveryError } =
       await createClient().auth.resetPasswordForEmail(email, {
-        redirectTo: getAuthCallbackUrl(),
+        redirectTo: getPasswordRecoveryUrl(),
         captchaToken,
       });
     setLoading(false);

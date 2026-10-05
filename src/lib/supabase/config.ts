@@ -33,5 +33,5 @@ export function getPasswordRecoveryUrl() {
     (url.hostname === "localhost" || url.hostname === "127.0.0.1");
   if (url.protocol !== "https:" && !isLocalHttp)
     throw new Error("A URL da aplicação precisa usar HTTPS.");
-  return `${url.origin}/auth/callback?flow=recovery`;
+  return `${url.origin}/auth/callback`;
 }

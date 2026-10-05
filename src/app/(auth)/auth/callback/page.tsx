@@ -9,22 +9,18 @@ import { isSupabaseConfigured } from "@/lib/supabase/config";
 
 export default function AuthCallbackPage() {
   const router = useRouter();
-  const [message, setMessage] = useState("Confirmando seu acesso...");
+  const [message, setMessage] = useState("Validando o link de recuperação...");
   useEffect(() => {
     if (!isSupabaseConfigured()) {
       router.replace("/login");
       return;
     }
-    const type = new URLSearchParams(window.location.hash.slice(1)).get("type");
-    const isRecoveryFlow =
-      new URLSearchParams(window.location.search).get("flow") === "recovery" ||
-      type === "recovery";
     const supabase = createClient();
     let completed = false;
-    const redirect = (isRecovery = isRecoveryFlow) => {
+    const redirect = () => {
       if (completed) return;
       completed = true;
-      router.replace(isRecovery ? "/auth/atualizar-senha" : "/dashboard");
+      router.replace("/auth/atualizar-senha");
       router.refresh();
     };
     const finish = async () => {
@@ -42,8 +38,8 @@ export default function AuthCallbackPage() {
     void finish();
     const {
       data: { subscription },
-    } = supabase.auth.onAuthStateChange((event, session) => {
-      if (session) redirect(isRecoveryFlow || event === "PASSWORD_RECOVERY");
+    } = supabase.auth.onAuthStateChange((_event, session) => {
+      if (session) redirect();
     });
     return () => subscription.unsubscribe();
   }, [router]);

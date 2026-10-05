@@ -15,6 +15,12 @@ export const dynamic = "force-dynamic";
 const money = new Intl.NumberFormat("pt-BR", { style: "currency", currency: "BRL" });
 const label: Record<string, string> = { aprovada: "Aprovada", parcialmente_paga: "Parcialmente paga", paga: "Paga", cancelada: "Cancelada" };
 
+function relatedName(relation: unknown) {
+  const value = Array.isArray(relation) ? relation[0] : relation;
+  if (!value || typeof value !== "object" || !("name" in value)) return null;
+  return typeof value.name === "string" ? value.name : null;
+}
+
 export default async function ExpensesPage({ searchParams }: { searchParams: Promise<{ mensagem?: string; erro?: string }> }) {
   const query = await searchParams;
   const supabase = isSupabaseConfigured() ? await createClient() : null;
@@ -31,15 +37,15 @@ export default async function ExpensesPage({ searchParams }: { searchParams: Pro
   const categories = categoriesResult?.data ?? [];
   const suppliers = suppliersResult?.data ?? [];
   const canPay = (status: string) => status === "aprovada" || status === "parcialmente_paga";
-  const recipient = (item: typeof expenses[number]) => item.suppliers?.[0]?.name || item.free_recipient || "—";
+  const recipient = (item: typeof expenses[number]) => relatedName(item.suppliers) || item.free_recipient || "—";
   const dependsOnBaseRecords = projects.length === 0 || stages.length === 0 || categories.length === 0;
 
   return <RegisterPageShell title="Despesas" description="Registre despesas manualmente ou aprove um orçamento. Toda despesa exige um destinatário e pode receber pagamentos parciais." icon={CreditCard} message={query.mensagem} error={query.erro} form={
     <form action={createManualExpense} className="grid gap-4 md:grid-cols-2">
       <div className="rounded-lg border border-primary/25 bg-primary/5 p-3 text-sm md:col-span-2"><p className="font-medium">Nova despesa manual</p><p className="mt-1 text-muted-foreground">Use para compromissos que não passaram por cotação/orçamento. O registro continuará com histórico e poderá receber parcelas.</p></div>
       <label className="grid gap-1.5 text-sm font-medium">Projeto *<select className="h-9 rounded-lg border border-input bg-transparent px-3 text-sm" name="projeto_id" required defaultValue=""><option disabled value="">Selecione</option>{projects.map((item) => <option key={item.id} value={item.id}>{item.name}</option>)}</select></label>
-      <label className="grid gap-1.5 text-sm font-medium">Etapa *<select className="h-9 rounded-lg border border-input bg-transparent px-3 text-sm" name="etapa_id" required defaultValue=""><option disabled value="">Selecione</option>{stages.map((item) => <option key={item.id} value={item.id}>{item.name}{item.projects?.[0]?.name ? ` · ${item.projects[0].name}` : ""}</option>)}</select></label>
-      <label className="grid gap-1.5 text-sm font-medium">Categoria de saída *<select className="h-9 rounded-lg border border-input bg-transparent px-3 text-sm" name="categoria_id" required defaultValue=""><option disabled value="">Selecione</option>{categories.map((item) => <option key={item.id} value={item.id}>{item.name}{item.projects?.[0]?.name ? ` · ${item.projects[0].name}` : ""}</option>)}</select></label>
+      <label className="grid gap-1.5 text-sm font-medium">Etapa *<select className="h-9 rounded-lg border border-input bg-transparent px-3 text-sm" name="etapa_id" required defaultValue=""><option disabled value="">Selecione</option>{stages.map((item) => <option key={item.id} value={item.id}>{item.name}{relatedName(item.projects) ? ` · ${relatedName(item.projects)}` : ""}</option>)}</select></label>
+      <label className="grid gap-1.5 text-sm font-medium">Categoria de saída *<select className="h-9 rounded-lg border border-input bg-transparent px-3 text-sm" name="categoria_id" required defaultValue=""><option disabled value="">Selecione</option>{categories.map((item) => <option key={item.id} value={item.id}>{item.name}{relatedName(item.projects) ? ` · ${relatedName(item.projects)}` : ""}</option>)}</select></label>
       <label className="grid gap-1.5 text-sm font-medium">Fornecedor cadastrado<select className="h-9 rounded-lg border border-input bg-transparent px-3 text-sm" name="fornecedor_id" defaultValue=""><option value="">Selecione, se houver</option>{suppliers.map((item) => <option key={item.id} value={item.id}>{item.name}</option>)}</select></label>
       <label className="grid gap-1.5 text-sm font-medium md:col-span-2">Ou destinatário livre<Input className="w-full" name="destinatario_livre" maxLength={160} placeholder="Preencha somente se não escolher um fornecedor cadastrado" /></label>
       <label className="grid gap-1.5 text-sm font-medium md:col-span-2">Descrição da despesa *<Input className="w-full" name="descricao" required maxLength={2000} placeholder="Ex.: Compra emergencial de material elétrico" /></label>

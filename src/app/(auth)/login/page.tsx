@@ -3,7 +3,7 @@
 import { type FormEvent, useRef, useState } from "react";
 import { LoaderCircle, LogIn } from "lucide-react";
 import Link from "next/link";
-import { useRouter } from "next/navigation";
+import { useRouter, useSearchParams } from "next/navigation";
 
 import { Button } from "@/components/ui/button";
 import { BrandSpectrum, IbaLogo } from "@/components/brand/iba-logo";
@@ -21,6 +21,7 @@ import { isSupabaseConfigured } from "@/lib/supabase/config";
 
 export default function LoginPage() {
   const router = useRouter();
+  const searchParams = useSearchParams();
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [captchaToken, setCaptchaToken] = useState<string | null>(null);
@@ -62,6 +63,14 @@ export default function LoginPage() {
         </CardHeader>
         <CardContent>
           <form className="space-y-4" onSubmit={handleSubmit}>
+            {searchParams.get("mensagem") === "senha-atualizada" ? (
+              <p
+                role="status"
+                className="rounded-lg bg-emerald-50 p-3 text-sm text-emerald-800"
+              >
+                Senha atualizada. Entre novamente para continuar.
+              </p>
+            ) : null}
             <div className="space-y-2">
               <label htmlFor="email" className="text-sm font-medium">
                 E-mail

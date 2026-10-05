@@ -2,6 +2,7 @@
 
 import { type FormEvent, useRef, useState } from "react";
 import { Mail } from "lucide-react";
+import { useSearchParams } from "next/navigation";
 
 import { Button } from "@/components/ui/button";
 import { BrandSpectrum, IbaLogo } from "@/components/brand/iba-logo";
@@ -21,6 +22,7 @@ import {
 } from "@/lib/supabase/config";
 
 export default function RecoverPasswordPage() {
+  const searchParams = useSearchParams();
   const [email, setEmail] = useState("");
   const [captchaToken, setCaptchaToken] = useState<string | null>(null);
   const [sent, setSent] = useState(false);
@@ -61,6 +63,15 @@ export default function RecoverPasswordPage() {
         </CardHeader>
         <CardContent>
           <form className="space-y-4" onSubmit={submit}>
+            {searchParams.get("erro") === "link-invalido" ? (
+              <p
+                role="alert"
+                className="rounded-lg bg-destructive/10 p-3 text-sm text-destructive"
+              >
+                Este link é inválido ou expirou. Solicite um novo link de
+                recuperação.
+              </p>
+            ) : null}
             <label className="grid gap-2 text-sm font-medium">
               E-mail
               <Input

@@ -73,7 +73,7 @@ function returnPath(formData: FormData, fallback: string) {
   const value = formData.get("retorno");
   if (typeof value !== "string" || value.length > fieldLimits.retorno) return fallback;
 
-  return /^\/projetos\/[0-9a-f]{8}-(?:[0-9a-f]{4}-){3}[0-9a-f]{12}\/(?:etapas|categorias|fornecedores|usuarios|cotacoes|orcamentos|despesas|pagamentos|entradas)$/i.test(value)
+  return /^\/projetos\/[0-9a-f]{8}-(?:[0-9a-f]{4}-){3}[0-9a-f]{12}\/(?:etapas|categorias|fornecedores|usuarios|cotacoes|comparar-cotacoes|orcamentos|despesas|pagamentos|entradas|relatorio-mensal)$/i.test(value)
     ? value
     : fallback;
 }
@@ -356,6 +356,7 @@ export async function createQuotation(formData: FormData) {
 }
 
 export async function approveQuotation(formData: FormData) {
+  const returnTo = returnPath(formData, "/comparar-cotacoes");
   try {
     const quotationId = readText(formData, "cotacao_id", true);
     const justification = readText(formData, "justificativa", true);
@@ -376,8 +377,9 @@ export async function approveQuotation(formData: FormData) {
     revalidatePath("/cotacoes");
     revalidatePath("/comparar-cotacoes");
     revalidatePath("/orcamentos");
-  } catch (error) { fail("/comparar-cotacoes", error); }
-  redirect("/comparar-cotacoes?mensagem=Cotação+aprovada+e+orçamento+gerado+com+sucesso.");
+    revalidateProjectContext(returnTo);
+  } catch (error) { fail(returnTo, error); }
+  redirect(`${returnTo}?mensagem=Cotação+aprovada+e+orçamento+gerado+com+sucesso.`);
 }
 
 export async function resolveBudgetRecipient(formData: FormData) {

@@ -31,8 +31,10 @@ export const projectNavigation: NavigationItem[] = [
   { href: "/categorias", label: "Categorias", icon: Tags, roles: ["admin", "financeiro"] },
   { href: "/fornecedores", label: "Fornecedores", icon: Building2, roles: ["admin", "financeiro"] },
   { href: "/cotacoes", label: "Cotações", icon: ReceiptText, roles: ["admin", "financeiro", "aprovador"] },
+  { href: "/comparar-cotacoes", label: "Comparar cotações", icon: WalletCards, roles: ["admin", "financeiro", "aprovador"] },
   { href: "/orcamentos", label: "Orçamentos", icon: Landmark, roles: ["admin", "financeiro"] },
   { href: "/despesas", label: "Despesas", icon: CreditCard },
   { href: "/pagamentos", label: "Pagamentos", icon: CreditCard, roles: ["admin", "financeiro"] },
   { href: "/entradas", label: "Entradas", icon: WalletCards, roles: ["admin", "financeiro"] },
+  { href: "/relatorio-mensal", label: "Relatório mensal", icon: FileBarChart },
 ];

@@ -1,4 +1,5 @@
 import { Scale } from "lucide-react";
+import { redirect } from "next/navigation";
 
 import { approveQuotation } from "@/lib/actions/base-registers";
 import { RegisterPageShell } from "@/components/modules/register-page-shell";
@@ -32,6 +33,7 @@ const isValidMonth = (value?: string) =>
 
 export default async function CompareQuotationsPage({
   searchParams,
+  lockedProjectId,
 }: {
   searchParams: Promise<{
     mensagem?: string;
@@ -43,22 +45,25 @@ export default async function CompareQuotationsPage({
     mes?: string;
     pagina?: string;
   }>;
+  lockedProjectId?: string;
 }) {
   const query = await searchParams;
+  if (!lockedProjectId) redirect("/selecionar-projeto");
   const supabase = isSupabaseConfigured() ? await createClient() : null;
-  const [projectsResult, stagesResult, categoriesResult, quotationsResult] =
+  const [stagesResult, categoriesResult, quotationsResult] =
     supabase
       ? await Promise.all([
-          supabase.from("projects").select("id, name").order("name").limit(200),
           supabase
             .from("project_stages")
             .select("id, name, project_id")
+            .eq("project_id", lockedProjectId)
             .eq("status", "ativo")
             .order("sort_order")
             .limit(300),
           supabase
             .from("categories")
             .select("id, name, project_id")
+            .eq("project_id", lockedProjectId)
             .eq("status", "ativo")
             .order("name")
             .limit(300),
@@ -67,27 +72,18 @@ export default async function CompareQuotationsPage({
             .select(
               "id, project_id, stage_id, category_id, title, proponent_name, total_value, execution_deadline, quotation_date, payment_method, payment_terms, included_scope, excluded_scope, warranty, drive_document_url, status, projects(name), project_stages(name), categories(name)",
             )
+            .eq("project_id", lockedProjectId)
             .in("status", statuses)
             .order("created_at", { ascending: false })
             .limit(200),
         ])
-      : [null, null, null, null];
-  const projects = projectsResult?.data ?? [];
+      : [null, null, null];
   const stages = stagesResult?.data ?? [];
   const categories = categoriesResult?.data ?? [];
-  const projectId = projects.some((item) => item.id === query.projeto)
-    ? query.projeto!
-    : "";
-  const visibleStages = projectId
-    ? stages.filter((item) => item.project_id === projectId)
-    : stages;
-  const visibleCategories = projectId
-    ? categories.filter((item) => item.project_id === projectId)
-    : categories;
-  const stageId = visibleStages.some((item) => item.id === query.etapa)
+  const stageId = stages.some((item) => item.id === query.etapa)
     ? query.etapa!
     : "";
-  const categoryId = visibleCategories.some(
+  const categoryId = categories.some(
     (item) => item.id === query.categoria,
   )
     ? query.categoria!
@@ -98,7 +94,6 @@ export default async function CompareQuotationsPage({
   const month = isValidMonth(query.mes) ? query.mes! : "";
   const quotations = (quotationsResult?.data ?? []).filter(
     (item) =>
-      (!projectId || item.project_id === projectId) &&
       (!stageId || item.stage_id === stageId) &&
       (!categoryId || item.category_id === categoryId) &&
       (!status || item.status === status) &&
@@ -108,23 +103,8 @@ export default async function CompareQuotationsPage({
   const filter = (
     <form
       aria-label="Filtros de comparação"
-      className="grid gap-3 md:grid-cols-2 xl:grid-cols-5"
+      className="grid gap-3 md:grid-cols-2 xl:grid-cols-4"
     >
-      <label className="grid gap-1.5 text-sm font-medium">
-        Projeto
-        <select
-          className="h-9 min-w-0 rounded-lg border border-input bg-background px-3 text-sm"
-          name="projeto"
-          defaultValue={projectId}
-        >
-          <option value="">Todos os projetos</option>
-          {projects.map((item) => (
-            <option key={item.id} value={item.id}>
-              {item.name}
-            </option>
-          ))}
-        </select>
-      </label>
       <label className="grid gap-1.5 text-sm font-medium">
         Etapa
         <select
@@ -133,7 +113,7 @@ export default async function CompareQuotationsPage({
           defaultValue={stageId}
         >
           <option value="">Todas as etapas</option>
-          {visibleStages.map((item) => (
+          {stages.map((item) => (
             <option key={item.id} value={item.id}>
               {item.name}
             </option>
@@ -148,7 +128,7 @@ export default async function CompareQuotationsPage({
           defaultValue={categoryId}
         >
           <option value="">Todas as categorias</option>
-          {visibleCategories.map((item) => (
+          {categories.map((item) => (
             <option key={item.id} value={item.id}>
               {item.name}
             </option>
@@ -179,7 +159,7 @@ export default async function CompareQuotationsPage({
           defaultValue={month}
         />
       </label>
-      <div className="md:col-span-2 xl:col-span-5">
+      <div className="md:col-span-2 xl:col-span-4">
         <Button type="submit">Filtrar cotações</Button>
       </div>
     </form>
@@ -187,7 +167,7 @@ export default async function CompareQuotationsPage({
   return (
     <RegisterPageShell
       title="Comparar cotações"
-      description="Consulte os dados lado a lado. O sistema não recomenda uma opção: a decisão é da comissão."
+      description="Consulte as propostas deste projeto lado a lado. O sistema não recomenda uma opção: a decisão é da comissão."
       icon={Scale}
       message={query.mensagem}
       error={query.erro}
@@ -265,6 +245,8 @@ export default async function CompareQuotationsPage({
                       className="space-y-2 border-t pt-4"
                     >
                       <input name="cotacao_id" type="hidden" value={item.id} />
+                      <input name="projeto_id" type="hidden" value={lockedProjectId} />
+                      <input name="retorno" type="hidden" value={`/projetos/${lockedProjectId}/comparar-cotacoes`} />
                       <label className="grid gap-1.5 text-sm font-medium">
                         Justificativa da escolha *
                         <textarea
@@ -290,7 +272,6 @@ export default async function CompareQuotationsPage({
             page={quotationPage.page}
             totalPages={quotationPage.totalPages}
             params={{
-              projeto: projectId,
               etapa: stageId,
               categoria: categoryId,
               status,

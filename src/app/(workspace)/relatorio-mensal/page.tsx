@@ -1,4 +1,5 @@
 import { FileBarChart } from "lucide-react";
+import { redirect } from "next/navigation";
 
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -35,68 +36,67 @@ function validMonth(value?: string) {
 
 export default async function MonthlyReportPage({
   searchParams,
+  lockedProjectId,
 }: {
   searchParams: Promise<{ mes?: string; projeto?: string }>;
+  lockedProjectId?: string;
 }) {
   const query = await searchParams;
+  if (!lockedProjectId) redirect("/selecionar-projeto");
   const month = validMonth(query.mes);
   const supabase = isSupabaseConfigured() ? await createClient() : null;
   const [
-    projectsResult,
     incomesResult,
     paymentsResult,
     expensesResult,
     budgetsResult,
   ] = supabase
     ? await Promise.all([
-        supabase.from("projects").select("id, name").order("name"),
         supabase
           .from("income_entries")
           .select("project_id, amount, received_date, origin, projects(name)")
+          .eq("project_id", lockedProjectId)
           .eq("status", "recebida"),
         supabase
           .from("payments")
           .select(
             "project_id, amount, payment_date, expenses(description), projects(name)",
-          ),
+          )
+          .eq("project_id", lockedProjectId),
         supabase
           .from("expenses")
           .select(
             "project_id, description, approved_value, remaining_value, competence, expected_date, projects(name)",
           )
+          .eq("project_id", lockedProjectId)
           .neq("status", "cancelada"),
         supabase
           .from("budgets")
           .select(
             "project_id, title, budget_value, competence, expected_date, projects(name)",
           )
+          .eq("project_id", lockedProjectId)
           .in("status", [
             "fornecedor_pendente",
             "aguardando_aprovacao_financeira",
           ]),
       ])
-    : [null, null, null, null, null];
-  const projects = projectsResult?.data ?? [];
-  const projectId = projects.some((project) => project.id === query.projeto)
-    ? query.projeto!
-    : "";
-  const belongsToProject = (item: { project_id: string }) =>
-    !projectId || item.project_id === projectId;
+      : [null, null, null, null];
   const isInMonth = (date: string | null, competence?: string | null) =>
     competence === month || (!competence && date?.startsWith(month));
   const incomes = (incomesResult?.data ?? []).filter(
-    (item) => belongsToProject(item) && item.received_date.startsWith(month),
+    (item) => item.received_date.startsWith(month),
   );
   const payments = (paymentsResult?.data ?? []).filter(
-    (item) => belongsToProject(item) && item.payment_date.startsWith(month),
+    (item) => item.payment_date.startsWith(month),
   );
   const expenses = (expensesResult?.data ?? []).filter(
     (item) =>
-      belongsToProject(item) && isInMonth(item.expected_date, item.competence),
+      isInMonth(item.expected_date, item.competence),
   );
   const budgets = (budgetsResult?.data ?? []).filter(
     (item) =>
-      belongsToProject(item) && isInMonth(item.expected_date, item.competence),
+      isInMonth(item.expected_date, item.competence),
   );
   const sum = (
     items: {
@@ -126,23 +126,8 @@ export default async function MonthlyReportPage({
         </div>
         <form
           aria-label="Filtros do relatório mensal"
-          className="grid gap-2 sm:grid-cols-[minmax(13rem,1fr)_10rem_auto]"
+          className="grid gap-2 sm:grid-cols-[10rem_auto]"
         >
-          <label className="grid gap-1 text-sm font-medium">
-            Projeto
-            <select
-              className="h-9 rounded-lg border border-input bg-background px-3 text-sm"
-              name="projeto"
-              defaultValue={projectId}
-            >
-              <option value="">Todos os projetos</option>
-              {projects.map((project) => (
-                <option key={project.id} value={project.id}>
-                  {project.name}
-                </option>
-              ))}
-            </select>
-          </label>
           <label className="grid gap-1 text-sm font-medium">
             Competência
             <input

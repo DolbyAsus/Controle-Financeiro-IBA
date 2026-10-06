@@ -37,4 +37,5 @@ export const projectNavigation: NavigationItem[] = [
   { href: "/pagamentos", label: "Pagamentos", icon: CreditCard, roles: ["admin", "financeiro"] },
   { href: "/entradas", label: "Entradas", icon: WalletCards, roles: ["admin", "financeiro"] },
   { href: "/relatorio-mensal", label: "Relatório mensal", icon: FileBarChart },
+  { href: "/historico", label: "Histórico", icon: History, roles: ["admin", "financeiro"] },
 ];

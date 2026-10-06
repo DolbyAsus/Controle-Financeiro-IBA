@@ -9,31 +9,25 @@ import {
   CardHeader,
   CardTitle,
 } from "@/components/ui/card";
-import type { UserRole } from "@/lib/navigation";
 import { getOperationalNotifications } from "@/lib/notifications";
+import { getProjectWorkspaceAccess } from "@/lib/project-access";
 import { isSupabaseConfigured } from "@/lib/supabase/config";
-import { createClient } from "@/lib/supabase/server";
 
 export const dynamic = "force-dynamic";
 
-export default async function NotificationsPage() {
+export default async function NotificationsPage({
+  lockedProjectId,
+}: {
+  lockedProjectId?: string;
+}) {
+  if (!lockedProjectId) redirect("/selecionar-projeto");
   if (!isSupabaseConfigured())
     return <NotificationContent notifications={[]} />;
-  const supabase = await createClient();
-  const { data: claims } = await supabase.auth.getClaims();
-  const userId = claims?.claims?.sub;
-  if (!userId) redirect("/login");
-  const { data: profile } = await supabase
-    .from("users_profile")
-    .select("role, status")
-    .eq("id", userId)
-    .maybeSingle();
-  if (!profile || profile.status !== "ativo") redirect("/login");
+  const access = await getProjectWorkspaceAccess(lockedProjectId);
+  if (!access) redirect("/selecionar-projeto?erro=projeto-nao-disponivel");
   return (
     <NotificationContent
-      notifications={await getOperationalNotifications(
-        profile.role as UserRole,
-      )}
+      notifications={await getOperationalNotifications(access.projectRole, lockedProjectId)}
     />
   );
 }

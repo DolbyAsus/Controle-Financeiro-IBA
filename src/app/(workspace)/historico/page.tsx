@@ -1,4 +1,5 @@
 import { History } from "lucide-react";
+import { redirect } from "next/navigation";
 
 import { Badge } from "@/components/ui/badge";
 import {
@@ -21,10 +22,13 @@ const actionLabel: Record<string, string> = {
 
 export default async function HistoryPage({
   searchParams,
+  lockedProjectId,
 }: {
   searchParams: Promise<{ pagina?: string }>;
+  lockedProjectId?: string;
 }) {
   const query = await searchParams;
+  if (!lockedProjectId) redirect("/selecionar-projeto");
   const logs = isSupabaseConfigured()
     ? ((
         await (
@@ -34,6 +38,7 @@ export default async function HistoryPage({
           .select(
             "id, action, entity_type, created_at, projects(name), users_profile(name, email)",
           )
+          .eq("project_id", lockedProjectId)
           .order("created_at", { ascending: false })
           .limit(100)
       ).data ?? [])

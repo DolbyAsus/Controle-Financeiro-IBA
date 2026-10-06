@@ -16,7 +16,7 @@ const fieldLimits: Record<string, number> = {
   garantia: 500, link_drive: 1000, link_comprovante: 1000, documento: 40,
   contato: 120, endereco: 500, origem: 160, destinatario_livre: 160,
   justificativa: 2000, funcao: 20, status: 40, tipo_pessoa: 30,
-  projeto_id: 36, etapa_id: 36, categoria_id: 36, fornecedor_id: 36,
+  projeto_id: 36, etapa_id: 36, categoria_id: 36, fornecedor_id: 36, fornecedor_existente_id: 36,
   orcamento_id: 36, cotacao_id: 36, despesa_id: 36, usuario_id: 36,
   categoria_principal_id: 36, ordem: 6, valor: 16, valor_total: 16,
   orcamento_planejado: 16, data_inicio: 10, data_pagamento: 10,
@@ -73,7 +73,7 @@ function returnPath(formData: FormData, fallback: string) {
   const value = formData.get("retorno");
   if (typeof value !== "string" || value.length > fieldLimits.retorno) return fallback;
 
-  return /^\/projetos\/[0-9a-f]{8}-(?:[0-9a-f]{4}-){3}[0-9a-f]{12}\/(?:cotacoes|orcamentos|despesas|pagamentos|entradas)$/i.test(value)
+  return /^\/projetos\/[0-9a-f]{8}-(?:[0-9a-f]{4}-){3}[0-9a-f]{12}\/(?:etapas|categorias|fornecedores|cotacoes|orcamentos|despesas|pagamentos|entradas)$/i.test(value)
     ? value
     : fallback;
 }
@@ -154,6 +154,7 @@ export async function createProject(formData: FormData) {
 }
 
 export async function createStage(formData: FormData) {
+  const returnTo = returnPath(formData, "/etapas");
   try {
     const profile = await currentProfile(["admin", "financeiro"]);
     const supabase = await createClient();
@@ -183,11 +184,13 @@ export async function createStage(formData: FormData) {
     const message = databaseMessage(error);
     if (message) throw new Error(message);
     revalidatePath("/etapas");
-  } catch (error) { fail("/etapas", error); }
-  redirect("/etapas?mensagem=Etapa+cadastrada+com+sucesso.");
+    revalidateProjectContext(returnTo);
+  } catch (error) { fail(returnTo, error); }
+  redirect(`${returnTo}?mensagem=Etapa+cadastrada+com+sucesso.`);
 }
 
 export async function createCategory(formData: FormData) {
+  const returnTo = returnPath(formData, "/categorias");
   try {
     const profile = await currentProfile(["admin", "financeiro"]);
     const supabase = await createClient();
@@ -203,20 +206,24 @@ export async function createCategory(formData: FormData) {
     const message = databaseMessage(error);
     if (message) throw new Error(message);
     revalidatePath("/categorias");
-  } catch (error) { fail("/categorias", error); }
-  redirect("/categorias?mensagem=Categoria+cadastrada+com+sucesso.");
+    revalidateProjectContext(returnTo);
+  } catch (error) { fail(returnTo, error); }
+  redirect(`${returnTo}?mensagem=Categoria+cadastrada+com+sucesso.`);
 }
 
 export async function createSupplier(formData: FormData) {
+  const returnTo = returnPath(formData, "/fornecedores");
+  let projectId: string | null = null;
   try {
-    const profile = await currentProfile(["admin", "financeiro"]);
+    const profile = await currentProfile(["admin"]);
     const supabase = await createClient();
+    projectId = readText(formData, "projeto_id");
     const categoryId = readText(formData, "categoria_principal_id");
     if (categoryId) {
       const { data: category } = await supabase.from("categories").select("id").eq("id", categoryId).maybeSingle();
       if (!category) throw new Error("A categoria principal selecionada não está disponível.");
     }
-    const { error } = await supabase.from("suppliers").insert({
+    const { data: supplier, error } = await supabase.from("suppliers").insert({
       church_id: profile.churchId,
       name: readText(formData, "nome", true),
       person_type: readText(formData, "tipo_pessoa"),
@@ -230,12 +237,47 @@ export async function createSupplier(formData: FormData) {
       notes: readText(formData, "observacoes"),
       created_by: profile.id,
       updated_by: profile.id,
-    });
+    }).select("id").single();
+    const message = databaseMessage(error);
+    if (message) throw new Error(message);
+    if (!supplier) throw new Error("Não foi possível criar o fornecedor.");
+    if (projectId) {
+      const { error: linkError } = await supabase.from("project_suppliers").insert({
+        project_id: projectId,
+        supplier_id: supplier.id,
+        status: "ativo",
+        created_by: profile.id,
+        updated_by: profile.id,
+      });
+      const linkMessage = databaseMessage(linkError);
+      if (linkMessage) {
+        await supabase.from("suppliers").delete().eq("id", supplier.id);
+        throw new Error(linkMessage);
+      }
+    }
+    revalidatePath("/fornecedores");
+    revalidateProjectContext(returnTo);
+  } catch (error) { fail(returnTo, error); }
+  redirect(`${returnTo}?mensagem=${projectId ? "Fornecedor+cadastrado+e+vinculado+ao+projeto." : "Fornecedor+cadastrado+com+sucesso."}`);
+}
+
+export async function linkSupplierToProject(formData: FormData) {
+  const returnTo = returnPath(formData, "/fornecedores");
+  try {
+    const profile = await currentProfile(["admin"]);
+    const supabase = await createClient();
+    const { error } = await supabase.from("project_suppliers").upsert({
+      project_id: readText(formData, "projeto_id", true),
+      supplier_id: readText(formData, "fornecedor_existente_id", true),
+      status: "ativo",
+      updated_by: profile.id,
+    }, { onConflict: "project_id,supplier_id" });
     const message = databaseMessage(error);
     if (message) throw new Error(message);
     revalidatePath("/fornecedores");
-  } catch (error) { fail("/fornecedores", error); }
-  redirect("/fornecedores?mensagem=Fornecedor+cadastrado+com+sucesso.");
+    revalidateProjectContext(returnTo);
+  } catch (error) { fail(returnTo, error); }
+  redirect(`${returnTo}?mensagem=Fornecedor+vinculado+ao+projeto.`);
 }
 
 export async function createQuotation(formData: FormData) {
@@ -474,6 +516,7 @@ export async function updateProject(formData: FormData) {
 }
 
 export async function updateStage(formData: FormData) {
+  const returnTo = returnPath(formData, "/etapas");
   try {
     const profile = await currentProfile(["admin", "financeiro"]);
     const startDate = readDate(formData, "previsao_inicio"); const endDate = readDate(formData, "previsao_termino");
@@ -488,33 +531,35 @@ export async function updateStage(formData: FormData) {
       sort_order: order, planned_budget: plannedBudget, expected_start_date: startDate, expected_end_date: endDate,
       status: readText(formData, "status", true), notes: readText(formData, "observacoes"), updated_by: profile.id,
     }).eq("id", readText(formData, "etapa_id", true)).select("id"));
-    revalidatePath("/etapas"); revalidatePath("/dashboard"); revalidatePath("/relatorio-mensal"); revalidatePath("/historico");
-  } catch (error) { fail("/etapas", error); }
-  redirect("/etapas?mensagem=Etapa+atualizada+com+sucesso.");
+    revalidatePath("/etapas"); revalidatePath("/dashboard"); revalidatePath("/relatorio-mensal"); revalidatePath("/historico"); revalidateProjectContext(returnTo);
+  } catch (error) { fail(returnTo, error); }
+  redirect(`${returnTo}?mensagem=Etapa+atualizada+com+sucesso.`);
 }
 
 export async function updateCategory(formData: FormData) {
+  const returnTo = returnPath(formData, "/categorias");
   try {
     const profile = await currentProfile(["admin", "financeiro"]); const supabase = await createClient();
     await ensureUpdated(supabase.from("categories").update({
       name: readText(formData, "nome", true), type: readText(formData, "tipo", true), description: readText(formData, "descricao"),
       status: readText(formData, "status", true), updated_by: profile.id,
     }).eq("id", readText(formData, "categoria_id", true)).select("id"));
-    revalidatePath("/categorias"); revalidatePath("/historico");
-  } catch (error) { fail("/categorias", error); }
-  redirect("/categorias?mensagem=Categoria+atualizada+com+sucesso.");
+    revalidatePath("/categorias"); revalidatePath("/historico"); revalidateProjectContext(returnTo);
+  } catch (error) { fail(returnTo, error); }
+  redirect(`${returnTo}?mensagem=Categoria+atualizada+com+sucesso.`);
 }
 
 export async function updateSupplier(formData: FormData) {
+  const returnTo = returnPath(formData, "/fornecedores");
   try {
-    const profile = await currentProfile(["admin", "financeiro"]); const supabase = await createClient();
+    const profile = await currentProfile(["admin"]); const supabase = await createClient();
     await ensureUpdated(supabase.from("suppliers").update({
       name: readText(formData, "nome", true), main_contact: readText(formData, "contato"), phone: readText(formData, "telefone"),
       email: readText(formData, "email"), status: readText(formData, "status", true), notes: readText(formData, "observacoes"), updated_by: profile.id,
     }).eq("id", readText(formData, "fornecedor_id", true)).select("id"));
-    revalidatePath("/fornecedores"); revalidatePath("/historico");
-  } catch (error) { fail("/fornecedores", error); }
-  redirect("/fornecedores?mensagem=Fornecedor+atualizado+com+sucesso.");
+    revalidatePath("/fornecedores"); revalidatePath("/historico"); revalidateProjectContext(returnTo);
+  } catch (error) { fail(returnTo, error); }
+  redirect(`${returnTo}?mensagem=Fornecedor+atualizado+com+sucesso.`);
 }
 
 export async function finishQuotation(formData: FormData) {

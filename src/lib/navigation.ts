@@ -12,7 +12,7 @@ export const primaryNavigation: NavigationItem[] = [
   { href: "/projetos", label: "Projetos", icon: FolderKanban, roles: ["admin"] },
   { href: "/etapas", label: "Etapas", icon: ClipboardList, roles: ["admin", "financeiro"] },
   { href: "/categorias", label: "Categorias", icon: Tags, roles: ["admin", "financeiro"] },
-  { href: "/fornecedores", label: "Fornecedores", icon: Building2, roles: ["admin", "financeiro"] },
+  { href: "/fornecedores", label: "Fornecedores", icon: Building2, roles: ["admin"] },
   { href: "/cotacoes", label: "Cotações", icon: ReceiptText },
   { href: "/comparar-cotacoes", label: "Comparar cotações", icon: WalletCards },
   { href: "/orcamentos", label: "Orçamentos", icon: Landmark },
@@ -26,6 +26,9 @@ export const primaryNavigation: NavigationItem[] = [
 
 export const projectNavigation: NavigationItem[] = [
   { href: "/dashboard", label: "Dashboard", icon: BarChart3 },
+  { href: "/etapas", label: "Etapas", icon: ClipboardList, roles: ["admin", "financeiro"] },
+  { href: "/categorias", label: "Categorias", icon: Tags, roles: ["admin", "financeiro"] },
+  { href: "/fornecedores", label: "Fornecedores", icon: Building2, roles: ["admin", "financeiro"] },
   { href: "/cotacoes", label: "Cotações", icon: ReceiptText },
   { href: "/orcamentos", label: "Orçamentos", icon: Landmark },
   { href: "/despesas", label: "Despesas", icon: CreditCard },

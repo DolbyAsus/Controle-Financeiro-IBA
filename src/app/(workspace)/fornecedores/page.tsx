@@ -1,6 +1,6 @@
 import { Building2 } from "lucide-react";
 
-import { createSupplier, updateSupplier } from "@/lib/actions/base-registers";
+import { createSupplier, linkSupplierToProject, updateSupplier } from "@/lib/actions/base-registers";
 import { RegisterPageShell } from "@/components/modules/register-page-shell";
 import { Pagination, paginate } from "@/components/modules/pagination";
 import { Badge } from "@/components/ui/badge";
@@ -29,20 +29,33 @@ export const dynamic = "force-dynamic";
 export default async function SuppliersPage({
   searchParams,
 }: {
-  searchParams: Promise<{ mensagem?: string; erro?: string; pagina?: string }>;
+  searchParams: Promise<{ mensagem?: string; erro?: string; pagina?: string; projeto?: string }>;
 }) {
   const query = await searchParams;
+  const projectId = query.projeto;
+  const returnTo = projectId ? `/projetos/${projectId}/fornecedores` : undefined;
   const supabase = isSupabaseConfigured() ? await createClient() : null;
   const categories = supabase
     ? ((
-        await supabase
+        await (projectId
+          ? supabase
+              .from("categories")
+              .select("id, name, projects(name)")
+              .eq("project_id", projectId)
+              .eq("status", "ativo")
+              .order("name")
+          : supabase
           .from("categories")
           .select("id, name, projects(name)")
           .eq("status", "ativo")
-          .order("name")
+          .order("name"))
       ).data ?? [])
     : [];
-  const suppliers = supabase
+  const supplierLinks = supabase && projectId
+    ? ((await supabase.from("project_suppliers").select("supplier_id").eq("project_id", projectId).eq("status", "ativo")).data ?? [])
+    : [];
+  const linkedSupplierIds = supplierLinks.map((item) => item.supplier_id);
+  const allSuppliers = supabase
     ? ((
         await supabase
           .from("suppliers")
@@ -51,6 +64,12 @@ export default async function SuppliersPage({
           )
           .order("name")
       ).data ?? [])
+    : [];
+  const suppliers = projectId
+    ? allSuppliers.filter((supplier) => linkedSupplierIds.includes(supplier.id))
+    : allSuppliers;
+  const unlinkedSuppliers = projectId
+    ? allSuppliers.filter((supplier) => !linkedSupplierIds.includes(supplier.id) && supplier.status === "ativo")
     : [];
   const supplierPage = paginate(suppliers, query.pagina);
   return (
@@ -62,6 +81,7 @@ export default async function SuppliersPage({
       error={query.erro}
       form={
         <form action={createSupplier} className="grid gap-4 md:grid-cols-2">
+          {projectId ? <><input name="projeto_id" type="hidden" value={projectId} /><input name="retorno" type="hidden" value={returnTo} /></> : null}
           <label className="grid gap-1.5 text-sm font-medium">
             Nome *
             <Input
@@ -163,6 +183,31 @@ export default async function SuppliersPage({
         </form>
       }
     >
+      {projectId ? (
+        <Card>
+          <CardHeader>
+            <CardTitle>Vincular fornecedor já cadastrado</CardTitle>
+            <CardDescription>
+              Reutilize o cadastro mestre sem duplicar dados. O fornecedor ficará disponível somente neste projeto.
+            </CardDescription>
+          </CardHeader>
+          <CardContent>
+            <form action={linkSupplierToProject} className="flex flex-col gap-3 sm:flex-row sm:items-end">
+              <input name="projeto_id" type="hidden" value={projectId} />
+              <input name="retorno" type="hidden" value={returnTo} />
+              <label className="grid flex-1 gap-1.5 text-sm font-medium">
+                Fornecedor disponível
+                <select className="h-9 rounded-lg border border-input bg-transparent px-3 text-sm" name="fornecedor_existente_id" required defaultValue="">
+                  <option disabled value="">Selecione</option>
+                  {unlinkedSuppliers.map((supplier) => <option key={supplier.id} value={supplier.id}>{supplier.name}</option>)}
+                </select>
+              </label>
+              <Button type="submit" variant="outline" disabled={unlinkedSuppliers.length === 0}>Vincular</Button>
+            </form>
+            {unlinkedSuppliers.length === 0 ? <p className="mt-2 text-xs text-muted-foreground">Não há outro fornecedor ativo disponível para vínculo.</p> : null}
+          </CardContent>
+        </Card>
+      ) : null}
       <Card>
         <CardHeader>
           <CardTitle>Fornecedores cadastrados</CardTitle>
@@ -257,6 +302,7 @@ export default async function SuppliersPage({
                 className="mt-3 grid gap-3 md:grid-cols-2"
               >
                 <input name="fornecedor_id" type="hidden" value={supplier.id} />
+                {returnTo ? <input name="retorno" type="hidden" value={returnTo} /> : null}
                 <label className="grid gap-1 text-sm">
                   Nome
                   <Input name="nome" required defaultValue={supplier.name} />

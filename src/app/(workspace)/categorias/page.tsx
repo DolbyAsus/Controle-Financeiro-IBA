@@ -34,20 +34,30 @@ const typeLabel: Record<string, string> = {
 export default async function CategoriesPage({
   searchParams,
 }: {
-  searchParams: Promise<{ mensagem?: string; erro?: string; pagina?: string }>;
+  searchParams: Promise<{ mensagem?: string; erro?: string; pagina?: string; projeto?: string }>;
 }) {
   const query = await searchParams;
+  const projectId = query.projeto;
+  const returnTo = projectId ? `/projetos/${projectId}/categorias` : undefined;
   const supabase = isSupabaseConfigured() ? await createClient() : null;
   const projects = supabase
-    ? ((await supabase.from("projects").select("id, name").order("name"))
+    ? ((await (projectId
+        ? supabase.from("projects").select("id, name").eq("id", projectId)
+        : supabase.from("projects").select("id, name").order("name")))
         .data ?? [])
     : [];
   const categories = supabase
     ? ((
-        await supabase
+        await (projectId
+          ? supabase
+              .from("categories")
+              .select("id, name, type, description, status, projects(name)")
+              .eq("project_id", projectId)
+              .order("name")
+          : supabase
           .from("categories")
           .select("id, name, type, description, status, projects(name)")
-          .order("name")
+          .order("name"))
       ).data ?? [])
     : [];
   const categoryPage = paginate(categories, query.pagina);
@@ -60,7 +70,7 @@ export default async function CategoriesPage({
       error={query.erro}
       form={
         <form action={createCategory} className="grid gap-4 md:grid-cols-2">
-          <label className="grid gap-1.5 text-sm font-medium">
+          {projectId ? <><input name="projeto_id" type="hidden" value={projectId} /><input name="retorno" type="hidden" value={returnTo} /></> : <label className="grid gap-1.5 text-sm font-medium">
             Projeto *
             <select
               className="h-9 rounded-lg border border-input bg-transparent px-3 text-sm"
@@ -77,7 +87,7 @@ export default async function CategoriesPage({
                 </option>
               ))}
             </select>
-          </label>
+          </label>}
           <label className="grid gap-1.5 text-sm font-medium">
             Nome *
             <Input
@@ -223,6 +233,7 @@ export default async function CategoriesPage({
                 className="mt-3 grid gap-3 md:grid-cols-2"
               >
                 <input name="categoria_id" type="hidden" value={category.id} />
+                {returnTo ? <input name="retorno" type="hidden" value={returnTo} /> : null}
                 <label className="grid gap-1 text-sm">
                   Nome
                   <Input name="nome" required defaultValue={category.name} />

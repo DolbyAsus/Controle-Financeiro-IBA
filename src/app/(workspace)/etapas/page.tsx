@@ -33,22 +33,34 @@ const money = new Intl.NumberFormat("pt-BR", {
 export default async function StagesPage({
   searchParams,
 }: {
-  searchParams: Promise<{ mensagem?: string; erro?: string; pagina?: string }>;
+  searchParams: Promise<{ mensagem?: string; erro?: string; pagina?: string; projeto?: string }>;
 }) {
   const query = await searchParams;
+  const projectId = query.projeto;
+  const returnTo = projectId ? `/projetos/${projectId}/etapas` : undefined;
   const supabase = isSupabaseConfigured() ? await createClient() : null;
   const projects = supabase
-    ? ((await supabase.from("projects").select("id, name").order("name"))
+    ? ((await (projectId
+        ? supabase.from("projects").select("id, name").eq("id", projectId)
+        : supabase.from("projects").select("id, name").order("name")))
         .data ?? [])
     : [];
   const stages = supabase
     ? ((
-        await supabase
+        await (projectId
+          ? supabase
+              .from("project_stages")
+              .select(
+                "id, name, code, description, sort_order, planned_budget, expected_start_date, expected_end_date, status, notes, projects(name)",
+              )
+              .eq("project_id", projectId)
+              .order("sort_order")
+          : supabase
           .from("project_stages")
           .select(
             "id, name, code, description, sort_order, planned_budget, expected_start_date, expected_end_date, status, notes, projects(name)",
           )
-          .order("sort_order")
+          .order("sort_order"))
       ).data ?? [])
     : [];
   const stagePage = paginate(stages, query.pagina);
@@ -61,7 +73,7 @@ export default async function StagesPage({
       error={query.erro}
       form={
         <form action={createStage} className="grid gap-4 md:grid-cols-2">
-          <label className="grid gap-1.5 text-sm font-medium">
+          {projectId ? <><input name="projeto_id" type="hidden" value={projectId} /><input name="retorno" type="hidden" value={returnTo} /></> : <label className="grid gap-1.5 text-sm font-medium">
             Projeto *
             <select
               className="h-9 rounded-lg border border-input bg-transparent px-3 text-sm"
@@ -78,7 +90,7 @@ export default async function StagesPage({
                 </option>
               ))}
             </select>
-          </label>
+          </label>}
           <label className="grid gap-1.5 text-sm font-medium">
             Nome da etapa *
             <Input
@@ -263,6 +275,7 @@ export default async function StagesPage({
                 className="mt-3 grid gap-3 md:grid-cols-2"
               >
                 <input name="etapa_id" type="hidden" value={stage.id} />
+                {returnTo ? <input name="retorno" type="hidden" value={returnTo} /> : null}
                 <label className="grid gap-1 text-sm">
                   Nome
                   <Input name="nome" required defaultValue={stage.name} />

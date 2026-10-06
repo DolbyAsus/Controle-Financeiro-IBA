@@ -123,6 +123,7 @@ export default async function PaymentsPage({
       error={query.erro}
       form={
         <form action={registerPayment} className="grid gap-4 md:grid-cols-2">
+          {projectId ? <input name="projeto_id" type="hidden" value={projectId} /> : null}
           {returnTo ? <input name="retorno" type="hidden" value={returnTo} /> : null}
           {selectedExpense ? (
             <div className="rounded-lg border border-primary/25 bg-primary/5 p-3 text-sm md:col-span-2">

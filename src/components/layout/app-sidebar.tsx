@@ -10,7 +10,7 @@ import { Sheet, SheetContent, SheetDescription, SheetHeader, SheetTitle, SheetTr
 import { type UserRole, projectNavigation } from "@/lib/navigation";
 import { cn } from "@/lib/utils";
 
-function NavigationLinks({ role, projectId }: { role?: UserRole; projectId?: string }) {
+function NavigationLinks({ role, projectId, isGlobalAdmin = false }: { role?: UserRole; projectId?: string; isGlobalAdmin?: boolean }) {
   const pathname = usePathname();
   const items = projectId
     ? projectNavigation.map((item) => ({ ...item, href: `/projetos/${projectId}${item.href}` }))
@@ -21,7 +21,7 @@ function NavigationLinks({ role, projectId }: { role?: UserRole; projectId?: str
         <Icon className="size-4" aria-hidden="true" />{label}
       </Link>
     ))}
-    {role === "admin" ? <Link href="/admin/resumo-geral" className={cn("flex min-h-10 items-center gap-3 rounded-lg px-3 text-sm font-medium transition-colors", pathname === "/admin/resumo-geral" ? "bg-primary text-primary-foreground shadow-sm" : "text-muted-foreground hover:bg-muted hover:text-foreground")}><ShieldCheck className="size-4" aria-hidden="true" />Resumo geral</Link> : null}
+    {isGlobalAdmin ? <Link href="/admin/resumo-geral" className={cn("flex min-h-10 items-center gap-3 rounded-lg px-3 text-sm font-medium transition-colors", pathname === "/admin/resumo-geral" ? "bg-primary text-primary-foreground shadow-sm" : "text-muted-foreground hover:bg-muted hover:text-foreground")}><ShieldCheck className="size-4" aria-hidden="true" />Resumo geral</Link> : null}
   </nav>;
 }
 
@@ -32,16 +32,16 @@ export function Brand({ projectId }: { projectId?: string }) {
   </Link>;
 }
 
-export function DesktopSidebar({ role, projectId }: { role?: UserRole; projectId?: string }) {
-  return <aside className="hidden min-h-screen w-68 shrink-0 border-r bg-sidebar lg:block"><BrandSpectrum className="h-1" /><Brand projectId={projectId} /><NavigationLinks role={role} projectId={projectId} /></aside>;
+export function DesktopSidebar({ role, projectId, isGlobalAdmin = false }: { role?: UserRole; projectId?: string; isGlobalAdmin?: boolean }) {
+  return <aside className="hidden min-h-screen w-68 shrink-0 border-r bg-sidebar lg:block"><BrandSpectrum className="h-1" /><Brand projectId={projectId} /><NavigationLinks role={role} projectId={projectId} isGlobalAdmin={isGlobalAdmin} /></aside>;
 }
 
-export function MobileSidebar({ role, projectId }: { role?: UserRole; projectId?: string }) {
+export function MobileSidebar({ role, projectId, isGlobalAdmin = false }: { role?: UserRole; projectId?: string; isGlobalAdmin?: boolean }) {
   return <Sheet>
     <SheetTrigger render={<Button variant="ghost" size="icon" aria-label="Abrir menu" />}><Menu className="size-5" aria-hidden="true" /></SheetTrigger>
     <SheetContent side="left" className="w-[min(20rem,85vw)] p-0">
       <SheetHeader className="sr-only"><SheetTitle>Menu principal</SheetTitle><SheetDescription>Navegação do sistema financeiro.</SheetDescription></SheetHeader>
-      <BrandSpectrum className="h-1" /><Brand projectId={projectId} /><NavigationLinks role={role} projectId={projectId} />
+      <BrandSpectrum className="h-1" /><Brand projectId={projectId} /><NavigationLinks role={role} projectId={projectId} isGlobalAdmin={isGlobalAdmin} />
     </SheetContent>
   </Sheet>;
 }

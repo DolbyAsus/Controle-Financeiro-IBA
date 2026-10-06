@@ -21,6 +21,7 @@ export default async function ProjectWorkspaceLayout({
     <AppShell
       userEmail={access.profile.email}
       role={access.projectRole}
+      isGlobalAdmin={access.profile.role === "admin"}
       activeProject={{ id: access.project.id, name: access.project.name }}
     >
       {children}

@@ -482,6 +482,7 @@ export default async function ExpensesPage({
                 className="grid gap-3 rounded-lg border p-3 md:grid-cols-[minmax(0,1fr)_minmax(260px,1fr)_auto] md:items-end"
               >
                 <input name="despesa_id" type="hidden" value={item.id} />
+                {projectId ? <input name="projeto_id" type="hidden" value={projectId} /> : null}
                 {returnTo ? <input name="retorno" type="hidden" value={returnTo} /> : null}
                 <div>
                   <p className="font-medium">{item.description}</p>

@@ -101,6 +101,37 @@ async function currentProfile(roles: UserRole[]): Promise<ProfileContext> {
   return { id: profile.id, churchId: profile.church_id, role: profile.role as UserRole };
 }
 
+async function currentProjectProfile(roles: UserRole[], projectId: string): Promise<ProfileContext> {
+  const supabase = await createClient();
+  const { data: claims, error: claimsError } = await supabase.auth.getClaims();
+  const userId = claims?.claims?.sub;
+  if (claimsError || !userId) throw new Error("Sua sessão expirou. Entre novamente.");
+  const { data: profile, error } = await supabase
+    .from("users_profile")
+    .select("id, church_id, role, status")
+    .eq("id", userId)
+    .maybeSingle();
+  if (error || !profile || profile.status !== "ativo") throw new Error("Seu perfil não está ativo.");
+  if (profile.role === "admin") return { id: profile.id, churchId: profile.church_id, role: "admin" };
+  const { data: membership } = await supabase
+    .from("project_memberships")
+    .select("role")
+    .eq("project_id", projectId)
+    .eq("user_id", profile.id)
+    .eq("status", "ativo")
+    .maybeSingle();
+  if (!membership || !roles.includes(membership.role as UserRole)) {
+    throw new Error("Você não tem permissão para esta ação neste projeto.");
+  }
+  return { id: profile.id, churchId: profile.church_id, role: membership.role as UserRole };
+}
+
+async function currentProjectProfileFromForm(formData: FormData, roles: UserRole[]) {
+  const projectId = readText(formData, "projeto_id");
+  if (projectId) return currentProjectProfile(roles, projectId);
+  return currentProfile(roles);
+}
+
 function databaseMessage(error: { message?: string } | null) {
   if (!error) return null;
   if (error.message?.includes("duplicate key")) return "Já existe um registro com estes dados.";
@@ -156,9 +187,9 @@ export async function createProject(formData: FormData) {
 export async function createStage(formData: FormData) {
   const returnTo = returnPath(formData, "/etapas");
   try {
-    const profile = await currentProfile(["admin", "financeiro"]);
-    const supabase = await createClient();
     const projectId = readText(formData, "projeto_id", true);
+    const profile = await currentProjectProfile(["admin", "financeiro"], projectId!);
+    const supabase = await createClient();
     const plannedBudget = readNonNegativeNumber(formData, "orcamento_planejado") ?? 0;
     const startDate = readDate(formData, "previsao_inicio");
     const endDate = readDate(formData, "previsao_termino");
@@ -192,10 +223,11 @@ export async function createStage(formData: FormData) {
 export async function createCategory(formData: FormData) {
   const returnTo = returnPath(formData, "/categorias");
   try {
-    const profile = await currentProfile(["admin", "financeiro"]);
+    const projectId = readText(formData, "projeto_id", true);
+    const profile = await currentProjectProfile(["admin", "financeiro"], projectId!);
     const supabase = await createClient();
     const { error } = await supabase.from("categories").insert({
-      project_id: readText(formData, "projeto_id", true),
+      project_id: projectId,
       name: readText(formData, "nome", true),
       type: readText(formData, "tipo", true),
       description: readText(formData, "descricao"),
@@ -283,7 +315,8 @@ export async function linkSupplierToProject(formData: FormData) {
 export async function createQuotation(formData: FormData) {
   const returnTo = returnPath(formData, "/cotacoes");
   try {
-    await currentProfile(["admin", "financeiro", "aprovador"]);
+    const projectId = readText(formData, "projeto_id", true);
+    await currentProjectProfile(["admin", "financeiro", "aprovador"], projectId!);
     const supabase = await createClient();
     const totalValue = readNonNegativeNumber(formData, "valor_total");
     if (!totalValue) throw new Error("Informe um valor total maior que zero.");
@@ -291,7 +324,7 @@ export async function createQuotation(formData: FormData) {
     const validUntil = readDate(formData, "validade_proposta");
     if (quotationDate && validUntil && validUntil < quotationDate) throw new Error("A validade da proposta deve ser posterior à data da cotação.");
     const { error } = await supabase.from("quotations").insert({
-      project_id: readText(formData, "projeto_id", true),
+      project_id: projectId,
       stage_id: readText(formData, "etapa_id", true),
       category_id: readText(formData, "categoria_id", true),
       title: readText(formData, "titulo", true),
@@ -324,10 +357,16 @@ export async function createQuotation(formData: FormData) {
 
 export async function approveQuotation(formData: FormData) {
   try {
-    await currentProfile(["admin", "financeiro", "aprovador"]);
     const quotationId = readText(formData, "cotacao_id", true);
     const justification = readText(formData, "justificativa", true);
     const supabase = await createClient();
+    const { data: quotation, error: quotationError } = await supabase
+      .from("quotations")
+      .select("project_id")
+      .eq("id", quotationId!)
+      .maybeSingle();
+    if (quotationError || !quotation) throw new Error("Cotação não encontrada.");
+    await currentProjectProfile(["admin", "financeiro", "aprovador"], quotation.project_id);
     const { error } = await supabase.rpc("approve_quotation", {
       target_quotation_id: quotationId,
       justification,
@@ -344,7 +383,7 @@ export async function approveQuotation(formData: FormData) {
 export async function resolveBudgetRecipient(formData: FormData) {
   const returnTo = returnPath(formData, "/orcamentos");
   try {
-    await currentProfile(["admin", "financeiro"]);
+    await currentProjectProfileFromForm(formData, ["admin", "financeiro"]);
     const budgetId = readText(formData, "orcamento_id", true);
     const supplierId = readText(formData, "fornecedor_id");
     const recipient = readText(formData, "destinatario_livre");
@@ -362,7 +401,7 @@ export async function resolveBudgetRecipient(formData: FormData) {
 export async function approveBudgetAsExpense(formData: FormData) {
   const returnTo = returnPath(formData, "/orcamentos");
   try {
-    await currentProfile(["admin", "financeiro"]);
+    await currentProjectProfileFromForm(formData, ["admin", "financeiro"]);
     const supabase = await createClient();
     const { error } = await supabase.rpc("approve_budget_as_expense", { target_budget_id: readText(formData, "orcamento_id", true) });
     const message = databaseMessage(error);
@@ -381,7 +420,7 @@ export async function approveBudgetAsExpense(formData: FormData) {
 export async function createManualExpense(formData: FormData) {
   const returnTo = returnPath(formData, "/despesas");
   try {
-    await currentProfile(["admin", "financeiro"]);
+    await currentProjectProfileFromForm(formData, ["admin", "financeiro"]);
     const supplierId = readText(formData, "fornecedor_id");
     const recipient = readText(formData, "destinatario_livre");
     if (!supplierId && !recipient) throw new Error("Informe um fornecedor ou destinatário livre.");
@@ -418,7 +457,7 @@ export async function createManualExpense(formData: FormData) {
 export async function registerPayment(formData: FormData) {
   const returnTo = returnPath(formData, "/pagamentos");
   try {
-    await currentProfile(["admin", "financeiro"]);
+    await currentProjectProfileFromForm(formData, ["admin", "financeiro"]);
     const amount = readNonNegativeNumber(formData, "valor");
     if (!amount) throw new Error("Informe um valor de pagamento maior que zero.");
     const paymentDate = readDate(formData, "data_pagamento");
@@ -443,14 +482,15 @@ export async function registerPayment(formData: FormData) {
 export async function createIncomeEntry(formData: FormData) {
   const returnTo = returnPath(formData, "/entradas");
   try {
-    const profile = await currentProfile(["admin", "financeiro"]);
+    const projectId = readText(formData, "projeto_id", true);
+    const profile = await currentProjectProfile(["admin", "financeiro"], projectId!);
     const amount = readNonNegativeNumber(formData, "valor");
     if (!amount) throw new Error("Informe um valor recebido maior que zero.");
     const receivedDate = readDate(formData, "data_recebimento");
     if (!receivedDate) throw new Error("Informe a data do recebimento.");
     const supabase = await createClient();
     const { error } = await supabase.from("income_entries").insert({
-      project_id: readText(formData, "projeto_id", true),
+      project_id: projectId,
       category_id: readText(formData, "categoria_id"),
       received_date: receivedDate,
       amount,
@@ -596,7 +636,7 @@ export async function updateSupplier(formData: FormData) {
 export async function finishQuotation(formData: FormData) {
   const returnTo = returnPath(formData, "/cotacoes");
   try {
-    await currentProfile(["admin", "financeiro", "aprovador"]);
+    await currentProjectProfileFromForm(formData, ["admin", "financeiro", "aprovador"]);
     const quotationId = readText(formData, "cotacao_id", true);
     const status = readText(formData, "status", true)!;
     const justification = readText(formData, "justificativa", true);
@@ -612,7 +652,7 @@ export async function finishQuotation(formData: FormData) {
 export async function cancelExpense(formData: FormData) {
   const returnTo = returnPath(formData, "/despesas");
   try {
-    await currentProfile(["admin", "financeiro"]); const supabase = await createClient();
+    await currentProjectProfileFromForm(formData, ["admin", "financeiro"]); const supabase = await createClient();
     const { error } = await supabase.rpc("cancel_expense", {
       target_expense_id: readText(formData, "despesa_id", true), justification: readText(formData, "justificativa", true),
     });

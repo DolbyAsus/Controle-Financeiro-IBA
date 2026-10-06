@@ -21,5 +21,5 @@ export default async function WorkspaceLayout({ children }: { children: ReactNod
     .maybeSingle();
   if (!profile || profile.status !== "ativo") redirect("/login");
   const notifications = await getOperationalNotifications(profile.role as UserRole);
-  return <AppShell userEmail={profile.email} role={profile.role as UserRole} notificationCount={notifications.length}>{children}</AppShell>;
+  return <AppShell userEmail={profile.email} role={profile.role as UserRole} isGlobalAdmin={profile.role === "admin"} notificationCount={notifications.length}>{children}</AppShell>;
 }

@@ -133,6 +133,7 @@ export default async function BudgetsPage({
                         name="orcamento_id"
                         value={item.id}
                       />
+                      {projectId ? <input type="hidden" name="projeto_id" value={projectId} /> : null}
                       {returnTo ? <input type="hidden" name="retorno" value={returnTo} /> : null}
                       <label className="grid gap-1 text-sm font-medium">
                         Fornecedor cadastrado
@@ -171,6 +172,7 @@ export default async function BudgetsPage({
                         name="orcamento_id"
                         value={item.id}
                       />
+                      {projectId ? <input type="hidden" name="projeto_id" value={projectId} /> : null}
                       {returnTo ? <input type="hidden" name="retorno" value={returnTo} /> : null}
                       <Button type="submit">Aprovar como despesa</Button>
                     </form>

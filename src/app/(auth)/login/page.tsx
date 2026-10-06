@@ -47,7 +47,7 @@ export default function LoginPage() {
       setError("Não foi possível entrar. Confira seu e-mail e sua senha.");
       return;
     }
-    router.replace("/dashboard");
+    router.replace("/selecionar-projeto");
     router.refresh();
   }
   return (

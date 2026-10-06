@@ -23,3 +23,7 @@ export const primaryNavigation: NavigationItem[] = [
   { href: "/historico", label: "Histórico", icon: History, roles: ["admin", "financeiro"] },
   { href: "/usuarios", label: "Usuários", icon: Users, roles: ["admin"] },
 ];
+
+export const projectNavigation: NavigationItem[] = [
+  { href: "/dashboard", label: "Dashboard", icon: BarChart3 },
+];

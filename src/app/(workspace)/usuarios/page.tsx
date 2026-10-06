@@ -43,7 +43,7 @@ export default async function UsersPage({
           .maybeSingle()
       : { data: null };
   if (isSupabaseConfigured() && profile?.role !== "admin")
-    redirect("/dashboard");
+    redirect("/selecionar-projeto");
   const users = supabase
     ? ((
         await supabase

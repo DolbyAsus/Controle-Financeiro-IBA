@@ -15,7 +15,7 @@ const fieldLimits: Record<string, number> = {
   condicoes_pagamento: 500, escopo_incluso: 2000, escopo_excluso: 2000,
   garantia: 500, link_drive: 1000, link_comprovante: 1000, documento: 40,
   contato: 120, endereco: 500, origem: 160, destinatario_livre: 160,
-  justificativa: 2000, funcao: 20, status: 40, tipo_pessoa: 30,
+  justificativa: 2000, funcao: 20, status: 40, tipo_pessoa: 30, funcao_projeto: 20,
   projeto_id: 36, etapa_id: 36, categoria_id: 36, fornecedor_id: 36, fornecedor_existente_id: 36,
   orcamento_id: 36, cotacao_id: 36, despesa_id: 36, usuario_id: 36,
   categoria_principal_id: 36, ordem: 6, valor: 16, valor_total: 16,
@@ -73,7 +73,7 @@ function returnPath(formData: FormData, fallback: string) {
   const value = formData.get("retorno");
   if (typeof value !== "string" || value.length > fieldLimits.retorno) return fallback;
 
-  return /^\/projetos\/[0-9a-f]{8}-(?:[0-9a-f]{4}-){3}[0-9a-f]{12}\/(?:etapas|categorias|fornecedores|cotacoes|orcamentos|despesas|pagamentos|entradas)$/i.test(value)
+  return /^\/projetos\/[0-9a-f]{8}-(?:[0-9a-f]{4}-){3}[0-9a-f]{12}\/(?:etapas|categorias|fornecedores|usuarios|cotacoes|orcamentos|despesas|pagamentos|entradas)$/i.test(value)
     ? value
     : fallback;
 }
@@ -487,6 +487,37 @@ export async function manageUserProfile(formData: FormData) {
     revalidatePath("/historico");
   } catch (error) { fail("/usuarios", error); }
   redirect("/usuarios?mensagem=Perfil+atualizado+com+sucesso.");
+}
+
+export async function manageProjectMembership(formData: FormData) {
+  const returnTo = returnPath(formData, "/selecionar-projeto");
+  try {
+    const profile = await currentProfile(["admin"]);
+    const projectId = readText(formData, "projeto_id", true);
+    const userId = readText(formData, "usuario_id", true);
+    const role = readText(formData, "funcao_projeto", true);
+    const status = readText(formData, "status", true);
+    if (!role || !["admin", "financeiro", "aprovador", "visualizador"].includes(role)) {
+      throw new Error("Selecione uma função de projeto válida.");
+    }
+    if (!status || !["ativo", "inativo"].includes(status)) {
+      throw new Error("Selecione um status válido.");
+    }
+    const supabase = await createClient();
+    const { error } = await supabase.from("project_memberships").upsert({
+      project_id: projectId,
+      user_id: userId,
+      role,
+      status,
+      updated_by: profile.id,
+    }, { onConflict: "project_id,user_id" });
+    const message = databaseMessage(error);
+    if (message) throw new Error(message);
+    revalidateProjectContext(returnTo);
+    revalidatePath("/selecionar-projeto");
+    revalidatePath("/usuarios");
+  } catch (error) { fail(returnTo, error); }
+  redirect(`${returnTo}?mensagem=Vínculo+do+usuário+atualizado+com+sucesso.`);
 }
 
 async function ensureUpdated(

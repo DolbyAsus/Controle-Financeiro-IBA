@@ -18,6 +18,12 @@ export type AccessibleProject = {
   status: string;
 };
 
+export type ProjectWorkspaceAccess = {
+  project: AccessibleProject;
+  profile: WorkspaceProfile;
+  projectRole: UserRole;
+};
+
 export async function getWorkspaceProfile(): Promise<WorkspaceProfile> {
   const supabase = await createClient();
   const { data, error } = await supabase.auth.getClaims();
@@ -52,4 +58,33 @@ export async function getAccessibleProject(projectId: string) {
     .eq("id", projectId)
     .maybeSingle();
   return data as AccessibleProject | null;
+}
+
+export async function getProjectWorkspaceAccess(
+  projectId: string,
+): Promise<ProjectWorkspaceAccess | null> {
+  const [profile, project] = await Promise.all([
+    getWorkspaceProfile(),
+    getAccessibleProject(projectId),
+  ]);
+  if (!project) return null;
+  if (profile.role === "admin") {
+    return { project, profile, projectRole: "admin" };
+  }
+
+  const supabase = await createClient();
+  const { data: membership } = await supabase
+    .from("project_memberships")
+    .select("role")
+    .eq("project_id", projectId)
+    .eq("user_id", profile.id)
+    .eq("status", "ativo")
+    .maybeSingle();
+  if (!membership) return null;
+
+  return {
+    project,
+    profile,
+    projectRole: membership.role as UserRole,
+  };
 }

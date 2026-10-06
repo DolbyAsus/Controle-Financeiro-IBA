@@ -13,6 +13,7 @@ export const primaryNavigation: NavigationItem[] = [
   { href: "/etapas", label: "Etapas", icon: ClipboardList, roles: ["admin", "financeiro"] },
   { href: "/categorias", label: "Categorias", icon: Tags, roles: ["admin", "financeiro"] },
   { href: "/fornecedores", label: "Fornecedores", icon: Building2, roles: ["admin"] },
+  { href: "/usuarios", label: "Equipe do projeto", icon: Users, roles: ["admin"] },
   { href: "/cotacoes", label: "Cotações", icon: ReceiptText },
   { href: "/comparar-cotacoes", label: "Comparar cotações", icon: WalletCards },
   { href: "/orcamentos", label: "Orçamentos", icon: Landmark },

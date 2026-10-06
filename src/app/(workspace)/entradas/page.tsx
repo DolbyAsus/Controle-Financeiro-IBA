@@ -33,32 +33,52 @@ const money = new Intl.NumberFormat("pt-BR", {
 export default async function IncomePage({
   searchParams,
 }: {
-  searchParams: Promise<{ mensagem?: string; erro?: string; pagina?: string }>;
+  searchParams: Promise<{ mensagem?: string; erro?: string; pagina?: string; projeto?: string }>;
 }) {
   const query = await searchParams;
+  const projectId = query.projeto;
+  const returnTo = projectId ? `/projetos/${projectId}/entradas` : undefined;
   const supabase = isSupabaseConfigured() ? await createClient() : null;
   const projects = supabase
-    ? ((await supabase.from("projects").select("id, name").order("name"))
+    ? ((await (projectId
+        ? supabase.from("projects").select("id, name").eq("id", projectId)
+        : supabase.from("projects").select("id, name").order("name")))
         .data ?? [])
     : [];
   const categories = supabase
     ? ((
-        await supabase
+        await (projectId
+          ? supabase
+              .from("categories")
+              .select("id, name, type, projects(name)")
+              .eq("project_id", projectId)
+              .in("type", ["entrada", "ambos"])
+              .eq("status", "ativo")
+              .order("name")
+          : supabase
           .from("categories")
           .select("id, name, type, projects(name)")
           .in("type", ["entrada", "ambos"])
           .eq("status", "ativo")
-          .order("name")
+          .order("name"))
       ).data ?? [])
     : [];
   const entries = supabase
     ? ((
-        await supabase
+        await (projectId
+          ? supabase
+              .from("income_entries")
+              .select(
+                "id, amount, received_date, origin, payment_method, status, projects(name), categories(name)",
+              )
+              .eq("project_id", projectId)
+              .order("received_date", { ascending: false })
+          : supabase
           .from("income_entries")
           .select(
             "id, amount, received_date, origin, payment_method, status, projects(name), categories(name)",
           )
-          .order("received_date", { ascending: false })
+          .order("received_date", { ascending: false }))
       ).data ?? [])
     : [];
   const entryPage = paginate(entries, query.pagina);
@@ -71,7 +91,7 @@ export default async function IncomePage({
       error={query.erro}
       form={
         <form action={createIncomeEntry} className="grid gap-4 md:grid-cols-2">
-          <label className="grid gap-1.5 text-sm font-medium">
+          {projectId ? <><input name="projeto_id" type="hidden" value={projectId} /><input name="retorno" type="hidden" value={returnTo} /></> : <label className="grid gap-1.5 text-sm font-medium">
             Projeto *
             <select
               className="h-9 rounded-lg border border-input bg-transparent px-3 text-sm"
@@ -88,7 +108,7 @@ export default async function IncomePage({
                 </option>
               ))}
             </select>
-          </label>
+          </label>}
           <label className="grid gap-1.5 text-sm font-medium">
             Categoria
             <select

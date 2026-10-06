@@ -49,10 +49,16 @@ function relatedName(relation: unknown) {
 export default async function ExpensesPage({
   searchParams,
 }: {
-  searchParams: Promise<{ mensagem?: string; erro?: string; pagina?: string }>;
+  searchParams: Promise<{ mensagem?: string; erro?: string; pagina?: string; projeto?: string }>;
 }) {
   const query = await searchParams;
+  const projectId = query.projeto;
+  const returnTo = projectId ? `/projetos/${projectId}/despesas` : undefined;
   const supabase = isSupabaseConfigured() ? await createClient() : null;
+  const supplierLinks = supabase && projectId
+    ? ((await supabase.from("project_suppliers").select("supplier_id").eq("project_id", projectId).eq("status", "ativo")).data ?? [])
+    : [];
+  const supplierIds = supplierLinks.map((item) => item.supplier_id);
   const [
     expensesResult,
     projectsResult,
@@ -61,29 +67,46 @@ export default async function ExpensesPage({
     suppliersResult,
   ] = supabase
     ? await Promise.all([
-        supabase
+        (projectId ? supabase
           .from("expenses")
           .select(
             "id, description, approved_value, paid_value, remaining_value, status, free_recipient, projects(name), suppliers(name), payments(id)",
           )
-          .order("created_at", { ascending: false }),
-        supabase.from("projects").select("id, name").order("name"),
-        supabase
+          .eq("project_id", projectId)
+          .order("created_at", { ascending: false }) : supabase
+          .from("expenses")
+          .select(
+            "id, description, approved_value, paid_value, remaining_value, status, free_recipient, projects(name), suppliers(name), payments(id)",
+          )
+          .order("created_at", { ascending: false })),
+        projectId ? supabase.from("projects").select("id, name").eq("id", projectId) : supabase.from("projects").select("id, name").order("name"),
+        (projectId ? supabase
+          .from("project_stages")
+          .select("id, name, projects(name)")
+          .eq("project_id", projectId)
+          .eq("status", "ativo")
+          .order("sort_order") : supabase
           .from("project_stages")
           .select("id, name, projects(name)")
           .eq("status", "ativo")
-          .order("sort_order"),
-        supabase
+          .order("sort_order")),
+        (projectId ? supabase
+          .from("categories")
+          .select("id, name, type, projects(name)")
+          .eq("project_id", projectId)
+          .eq("status", "ativo")
+          .in("type", ["saida", "ambos"])
+          .order("name") : supabase
           .from("categories")
           .select("id, name, type, projects(name)")
           .eq("status", "ativo")
           .in("type", ["saida", "ambos"])
-          .order("name"),
-        supabase
+          .order("name")),
+        (projectId ? (supplierIds.length ? supabase.from("suppliers").select("id, name").in("id", supplierIds).eq("status", "ativo").order("name") : supabase.from("suppliers").select("id, name").eq("id", "00000000-0000-0000-0000-000000000000")) : supabase
           .from("suppliers")
           .select("id, name")
           .eq("status", "ativo")
-          .order("name"),
+          .order("name")),
       ])
     : [null, null, null, null, null];
   const expenses = expensesResult?.data ?? [];
@@ -116,6 +139,7 @@ export default async function ExpensesPage({
           action={createManualExpense}
           className="grid gap-4 md:grid-cols-2"
         >
+          {projectId ? <><input name="projeto_id" type="hidden" value={projectId} /><input name="retorno" type="hidden" value={returnTo} /></> : null}
           <div className="rounded-lg border border-primary/25 bg-primary/5 p-3 text-sm md:col-span-2">
             <p className="font-medium">Nova despesa manual</p>
             <p className="mt-1 text-muted-foreground">
@@ -123,7 +147,7 @@ export default async function ExpensesPage({
               registro continuará com histórico e poderá receber parcelas.
             </p>
           </div>
-          <label className="grid gap-1.5 text-sm font-medium">
+          {projectId ? null : <label className="grid gap-1.5 text-sm font-medium">
             Projeto *
             <select
               className="h-9 rounded-lg border border-input bg-transparent px-3 text-sm"
@@ -140,7 +164,7 @@ export default async function ExpensesPage({
                 </option>
               ))}
             </select>
-          </label>
+          </label>}
           <label className="grid gap-1.5 text-sm font-medium">
             Etapa *
             <select
@@ -363,7 +387,7 @@ export default async function ExpensesPage({
                     {canPay(item.status) ? (
                       <Link
                         className={`${buttonVariants({ variant: "outline", size: "sm" })} mt-3`}
-                        href={`/pagamentos?despesa=${item.id}`}
+                        href={projectId ? `/projetos/${projectId}/pagamentos?despesa=${item.id}` : `/pagamentos?despesa=${item.id}`}
                       >
                         Registrar parcela
                       </Link>
@@ -414,7 +438,7 @@ export default async function ExpensesPage({
                                 variant: "outline",
                                 size: "sm",
                               })}
-                              href={`/pagamentos?despesa=${item.id}`}
+                              href={projectId ? `/projetos/${projectId}/pagamentos?despesa=${item.id}` : `/pagamentos?despesa=${item.id}`}
                             >
                               Registrar parcela
                             </Link>
@@ -458,6 +482,7 @@ export default async function ExpensesPage({
                 className="grid gap-3 rounded-lg border p-3 md:grid-cols-[minmax(0,1fr)_minmax(260px,1fr)_auto] md:items-end"
               >
                 <input name="despesa_id" type="hidden" value={item.id} />
+                {returnTo ? <input name="retorno" type="hidden" value={returnTo} /> : null}
                 <div>
                   <p className="font-medium">{item.description}</p>
                   <p className="text-sm text-muted-foreground">

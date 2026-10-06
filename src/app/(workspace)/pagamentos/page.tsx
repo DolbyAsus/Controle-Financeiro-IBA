@@ -61,29 +61,49 @@ export default async function PaymentsPage({
     despesa?: string;
     pagina?: string;
     pagina_despesas?: string;
+    projeto?: string;
   }>;
 }) {
   const query = await searchParams;
+  const projectId = query.projeto;
+  const returnTo = projectId ? `/projetos/${projectId}/pagamentos` : undefined;
   const supabase = isSupabaseConfigured() ? await createClient() : null;
   const expenses = supabase
     ? ((
-        await supabase
+        await (projectId
+          ? supabase
+              .from("expenses")
+              .select(
+                "id, description, approved_value, paid_value, remaining_value, status, free_recipient, suppliers(name), projects(name)",
+              )
+              .eq("project_id", projectId)
+              .in("status", ["aprovada", "parcialmente_paga"])
+              .order("created_at", { ascending: false })
+          : supabase
           .from("expenses")
           .select(
             "id, description, approved_value, paid_value, remaining_value, status, free_recipient, suppliers(name), projects(name)",
           )
           .in("status", ["aprovada", "parcialmente_paga"])
-          .order("created_at", { ascending: false })
+          .order("created_at", { ascending: false }))
       ).data ?? [])
     : [];
   const payments = supabase
     ? ((
-        await supabase
+        await (projectId
+          ? supabase
+              .from("payments")
+              .select(
+                "id, amount, payment_date, payment_method, expenses(description, free_recipient, suppliers(name)), projects(name)",
+              )
+              .eq("project_id", projectId)
+              .order("payment_date", { ascending: false })
+          : supabase
           .from("payments")
           .select(
             "id, amount, payment_date, payment_method, expenses(description, free_recipient, suppliers(name)), projects(name)",
           )
-          .order("payment_date", { ascending: false })
+          .order("payment_date", { ascending: false }))
       ).data ?? [])
     : [];
   const selectedExpense = expenses.find((item) => item.id === query.despesa);
@@ -103,6 +123,7 @@ export default async function PaymentsPage({
       error={query.erro}
       form={
         <form action={registerPayment} className="grid gap-4 md:grid-cols-2">
+          {returnTo ? <input name="retorno" type="hidden" value={returnTo} /> : null}
           {selectedExpense ? (
             <div className="rounded-lg border border-primary/25 bg-primary/5 p-3 text-sm md:col-span-2">
               <p className="font-medium">

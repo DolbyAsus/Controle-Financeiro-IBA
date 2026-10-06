@@ -41,49 +41,71 @@ const statusLabel: Record<string, string> = {
 export default async function QuotationsPage({
   searchParams,
 }: {
-  searchParams: Promise<{ mensagem?: string; erro?: string; pagina?: string }>;
+  searchParams: Promise<{ mensagem?: string; erro?: string; pagina?: string; projeto?: string }>;
 }) {
   const query = await searchParams;
+  const projectId = query.projeto;
+  const returnTo = projectId ? `/projetos/${projectId}/cotacoes` : undefined;
   const supabase = isSupabaseConfigured() ? await createClient() : null;
   const projects = supabase
-    ? ((await supabase.from("projects").select("id, name").order("name"))
+    ? ((await (projectId
+        ? supabase.from("projects").select("id, name").eq("id", projectId)
+        : supabase.from("projects").select("id, name").order("name")))
         .data ?? [])
     : [];
   const stages = supabase
     ? ((
-        await supabase
+        await (projectId
+          ? supabase.from("project_stages").select("id, name, projects(name)").eq("project_id", projectId).eq("status", "ativo").order("sort_order")
+          : supabase
           .from("project_stages")
           .select("id, name, projects(name)")
           .eq("status", "ativo")
-          .order("sort_order")
+          .order("sort_order"))
       ).data ?? [])
     : [];
   const categories = supabase
     ? ((
-        await supabase
+        await (projectId
+          ? supabase.from("categories").select("id, name, projects(name)").eq("project_id", projectId).eq("status", "ativo").order("name")
+          : supabase
           .from("categories")
           .select("id, name, projects(name)")
           .eq("status", "ativo")
-          .order("name")
+          .order("name"))
       ).data ?? [])
     : [];
+  const supplierLinks = supabase && projectId
+    ? ((await supabase.from("project_suppliers").select("supplier_id").eq("project_id", projectId).eq("status", "ativo")).data ?? [])
+    : [];
+  const supplierIds = supplierLinks.map((item) => item.supplier_id);
   const suppliers = supabase
     ? ((
-        await supabase
+        await (projectId
+          ? (supplierIds.length ? supabase.from("suppliers").select("id, name").in("id", supplierIds).eq("status", "ativo").order("name") : supabase.from("suppliers").select("id, name").eq("id", "00000000-0000-0000-0000-000000000000"))
+          : supabase
           .from("suppliers")
           .select("id, name")
           .eq("status", "ativo")
-          .order("name")
+          .order("name"))
       ).data ?? [])
     : [];
   const quotations = supabase
     ? ((
-        await supabase
+        await (projectId
+          ? supabase
+              .from("quotations")
+              .select(
+                "id, title, proponent_name, total_value, quotation_date, status, projects(name), project_stages(name), categories(name)",
+              )
+              .eq("project_id", projectId)
+              .order("created_at", { ascending: false })
+          : supabase
           .from("quotations")
           .select(
             "id, title, proponent_name, total_value, quotation_date, status, projects(name), project_stages(name), categories(name)",
           )
-          .order("created_at", { ascending: false })
+          .order("created_at", { ascending: false }))
       ).data ?? [])
     : [];
   const quotationPage = paginate(quotations, query.pagina);
@@ -99,7 +121,7 @@ export default async function QuotationsPage({
       error={query.erro}
       form={
         <form action={createQuotation} className="grid gap-4 md:grid-cols-2">
-          <label className="grid gap-1.5 text-sm font-medium">
+          {projectId ? <><input name="projeto_id" type="hidden" value={projectId} /><input name="retorno" type="hidden" value={returnTo} /></> : <label className="grid gap-1.5 text-sm font-medium">
             Projeto *
             <select
               className="h-9 rounded-lg border border-input bg-transparent px-3 text-sm"
@@ -116,7 +138,7 @@ export default async function QuotationsPage({
                 </option>
               ))}
             </select>
-          </label>
+          </label>}
           <label className="grid gap-1.5 text-sm font-medium">
             Etapa *
             <select
@@ -417,6 +439,7 @@ export default async function QuotationsPage({
                 className="grid gap-3 rounded-lg border p-3 md:grid-cols-[minmax(0,1fr)_180px_minmax(220px,1fr)_auto] md:items-end"
               >
                 <input name="cotacao_id" type="hidden" value={item.id} />
+                {returnTo ? <input name="retorno" type="hidden" value={returnTo} /> : null}
                 <div>
                   <p className="font-medium">{item.title}</p>
                   <p className="text-sm text-muted-foreground">

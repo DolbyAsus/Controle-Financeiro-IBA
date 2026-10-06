@@ -35,27 +35,43 @@ const label: Record<string, string> = {
 export default async function BudgetsPage({
   searchParams,
 }: {
-  searchParams: Promise<{ mensagem?: string; erro?: string; pagina?: string }>;
+  searchParams: Promise<{ mensagem?: string; erro?: string; pagina?: string; projeto?: string }>;
 }) {
   const query = await searchParams;
+  const projectId = query.projeto;
+  const returnTo = projectId ? `/projetos/${projectId}/orcamentos` : undefined;
   const supabase = isSupabaseConfigured() ? await createClient() : null;
+  const supplierLinks = supabase && projectId
+    ? ((await supabase.from("project_suppliers").select("supplier_id").eq("project_id", projectId).eq("status", "ativo")).data ?? [])
+    : [];
+  const supplierIds = supplierLinks.map((item) => item.supplier_id);
   const suppliers = supabase
     ? ((
-        await supabase
+        await (projectId
+          ? (supplierIds.length ? supabase.from("suppliers").select("id, name").in("id", supplierIds).eq("status", "ativo").order("name") : supabase.from("suppliers").select("id, name").eq("id", "00000000-0000-0000-0000-000000000000"))
+          : supabase
           .from("suppliers")
           .select("id, name")
           .eq("status", "ativo")
-          .order("name")
+          .order("name"))
       ).data ?? [])
     : [];
   const budgets = supabase
     ? ((
-        await supabase
+        await (projectId
+          ? supabase
+              .from("budgets")
+              .select(
+                "id, title, budget_value, status, free_recipient, choice_justification, projects(name), suppliers(name)",
+              )
+              .eq("project_id", projectId)
+              .order("created_at", { ascending: false })
+          : supabase
           .from("budgets")
           .select(
             "id, title, budget_value, status, free_recipient, choice_justification, projects(name), suppliers(name)",
           )
-          .order("created_at", { ascending: false })
+          .order("created_at", { ascending: false }))
       ).data ?? [])
     : [];
   const budgetPage = paginate(budgets, query.pagina);
@@ -117,6 +133,7 @@ export default async function BudgetsPage({
                         name="orcamento_id"
                         value={item.id}
                       />
+                      {returnTo ? <input type="hidden" name="retorno" value={returnTo} /> : null}
                       <label className="grid gap-1 text-sm font-medium">
                         Fornecedor cadastrado
                         <select
@@ -154,6 +171,7 @@ export default async function BudgetsPage({
                         name="orcamento_id"
                         value={item.id}
                       />
+                      {returnTo ? <input type="hidden" name="retorno" value={returnTo} /> : null}
                       <Button type="submit">Aprovar como despesa</Button>
                     </form>
                   ) : null}

@@ -26,4 +26,9 @@ export const primaryNavigation: NavigationItem[] = [
 
 export const projectNavigation: NavigationItem[] = [
   { href: "/dashboard", label: "Dashboard", icon: BarChart3 },
+  { href: "/cotacoes", label: "Cotações", icon: ReceiptText },
+  { href: "/orcamentos", label: "Orçamentos", icon: Landmark },
+  { href: "/despesas", label: "Despesas", icon: CreditCard },
+  { href: "/pagamentos", label: "Pagamentos", icon: CreditCard },
+  { href: "/entradas", label: "Entradas", icon: WalletCards },
 ];

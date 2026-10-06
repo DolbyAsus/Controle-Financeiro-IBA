@@ -22,6 +22,7 @@ const fieldLimits: Record<string, number> = {
   orcamento_planejado: 16, data_inicio: 10, data_pagamento: 10,
   data_recebimento: 10, data_prevista: 10, data_cotacao: 10, validade_proposta: 10,
   previsao_inicio: 10, previsao_termino: 10,
+  retorno: 200,
 };
 
 function readText(formData: FormData, field: string, required = false) {
@@ -66,6 +67,21 @@ function readNonNegativeNumber(formData: FormData, field: string) {
 function fail(path: string, error: unknown): never {
   const message = error instanceof Error ? error.message : "Não foi possível salvar o registro.";
   redirect(`${path}?erro=${encodeURIComponent(message)}`);
+}
+
+function returnPath(formData: FormData, fallback: string) {
+  const value = formData.get("retorno");
+  if (typeof value !== "string" || value.length > fieldLimits.retorno) return fallback;
+
+  return /^\/projetos\/[0-9a-f]{8}-(?:[0-9a-f]{4}-){3}[0-9a-f]{12}\/(?:cotacoes|orcamentos|despesas|pagamentos|entradas)$/i.test(value)
+    ? value
+    : fallback;
+}
+
+function revalidateProjectContext(path: string) {
+  revalidatePath(path);
+  const match = path.match(/^\/projetos\/([0-9a-f-]{36})\//i);
+  if (match) revalidatePath(`/projetos/${match[1]}/dashboard`);
 }
 
 async function currentProfile(roles: UserRole[]): Promise<ProfileContext> {
@@ -223,6 +239,7 @@ export async function createSupplier(formData: FormData) {
 }
 
 export async function createQuotation(formData: FormData) {
+  const returnTo = returnPath(formData, "/cotacoes");
   try {
     await currentProfile(["admin", "financeiro", "aprovador"]);
     const supabase = await createClient();
@@ -258,8 +275,9 @@ export async function createQuotation(formData: FormData) {
     if (message) throw new Error(message);
     revalidatePath("/cotacoes");
     revalidatePath("/comparar-cotacoes");
-  } catch (error) { fail("/cotacoes", error); }
-  redirect("/cotacoes?mensagem=Cotação+cadastrada+com+sucesso.");
+    revalidateProjectContext(returnTo);
+  } catch (error) { fail(returnTo, error); }
+  redirect(`${returnTo}?mensagem=Cotação+cadastrada+com+sucesso.`);
 }
 
 export async function approveQuotation(formData: FormData) {
@@ -282,6 +300,7 @@ export async function approveQuotation(formData: FormData) {
 }
 
 export async function resolveBudgetRecipient(formData: FormData) {
+  const returnTo = returnPath(formData, "/orcamentos");
   try {
     await currentProfile(["admin", "financeiro"]);
     const budgetId = readText(formData, "orcamento_id", true);
@@ -293,11 +312,13 @@ export async function resolveBudgetRecipient(formData: FormData) {
     const message = databaseMessage(error);
     if (message) throw new Error(message);
     revalidatePath("/orcamentos");
-  } catch (error) { fail("/orcamentos", error); }
-  redirect("/orcamentos?mensagem=Destinatário+definido.+O+orçamento+está+pronto+para+aprovação.");
+    revalidateProjectContext(returnTo);
+  } catch (error) { fail(returnTo, error); }
+  redirect(`${returnTo}?mensagem=Destinatário+definido.+O+orçamento+está+pronto+para+aprovação.`);
 }
 
 export async function approveBudgetAsExpense(formData: FormData) {
+  const returnTo = returnPath(formData, "/orcamentos");
   try {
     await currentProfile(["admin", "financeiro"]);
     const supabase = await createClient();
@@ -310,11 +331,13 @@ export async function approveBudgetAsExpense(formData: FormData) {
     revalidatePath("/dashboard");
     revalidatePath("/relatorio-mensal");
     revalidatePath("/historico");
-  } catch (error) { fail("/orcamentos", error); }
-  redirect("/orcamentos?mensagem=Orçamento+aprovado+e+despesa+criada+com+sucesso.");
+    revalidateProjectContext(returnTo);
+  } catch (error) { fail(returnTo, error); }
+  redirect(`${returnTo}?mensagem=Orçamento+aprovado+e+despesa+criada+com+sucesso.`);
 }
 
 export async function createManualExpense(formData: FormData) {
+  const returnTo = returnPath(formData, "/despesas");
   try {
     await currentProfile(["admin", "financeiro"]);
     const supplierId = readText(formData, "fornecedor_id");
@@ -345,11 +368,13 @@ export async function createManualExpense(formData: FormData) {
     revalidatePath("/dashboard");
     revalidatePath("/relatorio-mensal");
     revalidatePath("/historico");
-  } catch (error) { fail("/despesas", error); }
-  redirect("/despesas?mensagem=Despesa+manual+cadastrada+com+sucesso.");
+    revalidateProjectContext(returnTo);
+  } catch (error) { fail(returnTo, error); }
+  redirect(`${returnTo}?mensagem=Despesa+manual+cadastrada+com+sucesso.`);
 }
 
 export async function registerPayment(formData: FormData) {
+  const returnTo = returnPath(formData, "/pagamentos");
   try {
     await currentProfile(["admin", "financeiro"]);
     const amount = readNonNegativeNumber(formData, "valor");
@@ -368,11 +393,13 @@ export async function registerPayment(formData: FormData) {
     revalidatePath("/dashboard");
     revalidatePath("/relatorio-mensal");
     revalidatePath("/historico");
-  } catch (error) { fail("/pagamentos", error); }
-  redirect("/pagamentos?mensagem=Pagamento+registrado+com+sucesso.");
+    revalidateProjectContext(returnTo);
+  } catch (error) { fail(returnTo, error); }
+  redirect(`${returnTo}?mensagem=Pagamento+registrado+com+sucesso.`);
 }
 
 export async function createIncomeEntry(formData: FormData) {
+  const returnTo = returnPath(formData, "/entradas");
   try {
     const profile = await currentProfile(["admin", "financeiro"]);
     const amount = readNonNegativeNumber(formData, "valor");
@@ -398,8 +425,9 @@ export async function createIncomeEntry(formData: FormData) {
     revalidatePath("/entradas");
     revalidatePath("/dashboard");
     revalidatePath("/relatorio-mensal");
-  } catch (error) { fail("/entradas", error); }
-  redirect("/entradas?mensagem=Entrada+registrada+com+sucesso.");
+    revalidateProjectContext(returnTo);
+  } catch (error) { fail(returnTo, error); }
+  redirect(`${returnTo}?mensagem=Entrada+registrada+com+sucesso.`);
 }
 
 export async function manageUserProfile(formData: FormData) {
@@ -490,6 +518,7 @@ export async function updateSupplier(formData: FormData) {
 }
 
 export async function finishQuotation(formData: FormData) {
+  const returnTo = returnPath(formData, "/cotacoes");
   try {
     await currentProfile(["admin", "financeiro", "aprovador"]);
     const quotationId = readText(formData, "cotacao_id", true);
@@ -499,19 +528,20 @@ export async function finishQuotation(formData: FormData) {
     const supabase = await createClient();
     const { error } = await supabase.rpc("finish_quotation", { target_quotation_id: quotationId, target_status: status, justification });
     const message = databaseMessage(error); if (message) throw new Error(message);
-    revalidatePath("/cotacoes"); revalidatePath("/comparar-cotacoes"); revalidatePath("/historico");
-  } catch (error) { fail("/cotacoes", error); }
-  redirect("/cotacoes?mensagem=Cotação+encerrada+e+histórico+registrado.");
+    revalidatePath("/cotacoes"); revalidatePath("/comparar-cotacoes"); revalidatePath("/historico"); revalidateProjectContext(returnTo);
+  } catch (error) { fail(returnTo, error); }
+  redirect(`${returnTo}?mensagem=Cotação+encerrada+e+histórico+registrado.`);
 }
 
 export async function cancelExpense(formData: FormData) {
+  const returnTo = returnPath(formData, "/despesas");
   try {
     await currentProfile(["admin", "financeiro"]); const supabase = await createClient();
     const { error } = await supabase.rpc("cancel_expense", {
       target_expense_id: readText(formData, "despesa_id", true), justification: readText(formData, "justificativa", true),
     });
     const message = databaseMessage(error); if (message) throw new Error(message);
-    revalidatePath("/despesas"); revalidatePath("/dashboard"); revalidatePath("/relatorio-mensal"); revalidatePath("/historico");
-  } catch (error) { fail("/despesas", error); }
-  redirect("/despesas?mensagem=Despesa+cancelada+e+histórico+registrado.");
+    revalidatePath("/despesas"); revalidatePath("/dashboard"); revalidatePath("/relatorio-mensal"); revalidatePath("/historico"); revalidateProjectContext(returnTo);
+  } catch (error) { fail(returnTo, error); }
+  redirect(`${returnTo}?mensagem=Despesa+cancelada+e+histórico+registrado.`);
 }

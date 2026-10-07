@@ -1,6 +1,7 @@
 import { Tags } from "lucide-react";
 
-import { createCategory, updateCategory } from "@/lib/actions/base-registers";
+import { createCategory } from "@/lib/actions/base-registers";
+import { CategoryEditDialog } from "@/components/categories/category-edit-dialog";
 import { RegisterPageShell } from "@/components/modules/register-page-shell";
 import { Pagination, paginate } from "@/components/modules/pagination";
 import { Badge } from "@/components/ui/badge";
@@ -171,6 +172,7 @@ export default async function CategoriesPage({
                       {category.projects?.[0]?.name || "Projeto"} ·{" "}
                       {category.status}
                     </p>
+                    <div className="mt-3"><CategoryEditDialog category={category} returnTo={returnTo} /></div>
                   </article>
                 ))}
               </div>
@@ -182,6 +184,7 @@ export default async function CategoriesPage({
                       <TableHead>Projeto</TableHead>
                       <TableHead>Uso</TableHead>
                       <TableHead>Status</TableHead>
+                      <TableHead className="text-right">Ações</TableHead>
                     </TableRow>
                   </TableHeader>
                   <TableBody>
@@ -199,6 +202,7 @@ export default async function CategoriesPage({
                           </Badge>
                         </TableCell>
                         <TableCell>{category.status}</TableCell>
+                        <TableCell className="text-right"><CategoryEditDialog category={category} returnTo={returnTo} /></TableCell>
                       </TableRow>
                     ))}
                   </TableBody>
@@ -211,74 +215,6 @@ export default async function CategoriesPage({
               />
             </>
           )}
-        </CardContent>
-      </Card>
-      <Card>
-        <CardHeader>
-          <CardTitle>Editar ou inativar categoria</CardTitle>
-          <CardDescription>
-            Categorias inativas permanecem no histórico, mas deixam de aparecer
-            nos novos lançamentos.
-          </CardDescription>
-        </CardHeader>
-        <CardContent className="grid gap-3">
-          {categoryPage.items.map((category) => (
-            <details key={category.id} className="rounded-lg border p-3">
-              <summary className="cursor-pointer font-medium">
-                {category.name}{" "}
-                <span className="text-sm font-normal text-muted-foreground">
-                  · {typeLabel[category.type]}
-                </span>
-              </summary>
-              <form
-                action={updateCategory}
-                className="mt-3 grid gap-3 md:grid-cols-2"
-              >
-                <input name="categoria_id" type="hidden" value={category.id} />
-                {returnTo ? <input name="retorno" type="hidden" value={returnTo} /> : null}
-                <label className="grid gap-1 text-sm">
-                  Nome
-                  <Input name="nome" required defaultValue={category.name} />
-                </label>
-                <label className="grid gap-1 text-sm">
-                  Uso
-                  <select
-                    className="h-9 rounded-lg border border-input bg-background px-3"
-                    name="tipo"
-                    defaultValue={category.type}
-                  >
-                    <option value="saida">Saída</option>
-                    <option value="entrada">Entrada</option>
-                    <option value="ambos">Entrada e saída</option>
-                  </select>
-                </label>
-                <label className="grid gap-1 text-sm">
-                  Status
-                  <select
-                    className="h-9 rounded-lg border border-input bg-background px-3"
-                    name="status"
-                    defaultValue={category.status}
-                  >
-                    <option value="ativo">Ativa</option>
-                    <option value="inativo">Inativa</option>
-                  </select>
-                </label>
-                <label className="grid gap-1 text-sm">
-                  Descrição
-                  <textarea
-                    className="min-h-16 rounded-lg border border-input bg-transparent p-2"
-                    name="descricao"
-                    defaultValue={category.description || ""}
-                  />
-                </label>
-                <div className="md:col-span-2">
-                  <Button size="sm" type="submit">
-                    Salvar alterações
-                  </Button>
-                </div>
-              </form>
-            </details>
-          ))}
         </CardContent>
       </Card>
     </RegisterPageShell>

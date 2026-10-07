@@ -1,6 +1,7 @@
 import { ClipboardList } from "lucide-react";
 
-import { createStage, updateStage } from "@/lib/actions/base-registers";
+import { createStage } from "@/lib/actions/base-registers";
+import { StageEditDialog } from "@/components/stages/stage-edit-dialog";
 import { RegisterPageShell } from "@/components/modules/register-page-shell";
 import { Pagination, paginate } from "@/components/modules/pagination";
 import { Badge } from "@/components/ui/badge";
@@ -212,6 +213,7 @@ export default async function StagesPage({
                       {stage.projects?.[0]?.name || "Projeto"} ·{" "}
                       {money.format(Number(stage.planned_budget))}
                     </p>
+                    <div className="mt-3"><StageEditDialog stage={stage} returnTo={returnTo} /></div>
                   </article>
                 ))}
               </div>
@@ -224,6 +226,7 @@ export default async function StagesPage({
                       <TableHead>Ordem</TableHead>
                       <TableHead>Planejado</TableHead>
                       <TableHead>Status</TableHead>
+                      <TableHead className="text-right">Ações</TableHead>
                     </TableRow>
                   </TableHeader>
                   <TableBody>
@@ -243,6 +246,7 @@ export default async function StagesPage({
                         <TableCell>
                           <Badge variant="secondary">{stage.status}</Badge>
                         </TableCell>
+                        <TableCell className="text-right"><StageEditDialog stage={stage} returnTo={returnTo} /></TableCell>
                       </TableRow>
                     ))}
                   </TableBody>
@@ -255,113 +259,6 @@ export default async function StagesPage({
               />
             </>
           )}
-        </CardContent>
-      </Card>
-      <Card>
-        <CardHeader>
-          <CardTitle>Editar ou inativar etapa</CardTitle>
-          <CardDescription>
-            Inative etapas que não devem receber novos lançamentos; os registros
-            existentes serão preservados.
-          </CardDescription>
-        </CardHeader>
-        <CardContent className="grid gap-3">
-          {stagePage.items.map((stage) => (
-            <details key={stage.id} className="rounded-lg border p-3">
-              <summary className="cursor-pointer font-medium">
-                {stage.code ? `${stage.code} · ` : ""}
-                {stage.name}
-              </summary>
-              <form
-                action={updateStage}
-                className="mt-3 grid gap-3 md:grid-cols-2"
-              >
-                <input name="etapa_id" type="hidden" value={stage.id} />
-                {returnTo ? <input name="retorno" type="hidden" value={returnTo} /> : null}
-                <label className="grid gap-1 text-sm">
-                  Nome
-                  <Input name="nome" required defaultValue={stage.name} />
-                </label>
-                <label className="grid gap-1 text-sm">
-                  Código
-                  <Input name="codigo" defaultValue={stage.code || ""} />
-                </label>
-                <label className="grid gap-1 text-sm">
-                  Ordem
-                  <input
-                    className="h-9 rounded-lg border border-input bg-transparent px-3"
-                    name="ordem"
-                    type="number"
-                    min="0"
-                    required
-                    defaultValue={stage.sort_order}
-                  />
-                </label>
-                <label className="grid gap-1 text-sm">
-                  Orçamento planejado
-                  <input
-                    className="h-9 rounded-lg border border-input bg-transparent px-3"
-                    name="orcamento_planejado"
-                    type="number"
-                    min="0"
-                    step="0.01"
-                    required
-                    defaultValue={stage.planned_budget}
-                  />
-                </label>
-                <label className="grid gap-1 text-sm">
-                  Início
-                  <input
-                    className="h-9 rounded-lg border border-input bg-transparent px-3"
-                    name="previsao_inicio"
-                    type="date"
-                    defaultValue={stage.expected_start_date || ""}
-                  />
-                </label>
-                <label className="grid gap-1 text-sm">
-                  Término
-                  <input
-                    className="h-9 rounded-lg border border-input bg-transparent px-3"
-                    name="previsao_termino"
-                    type="date"
-                    defaultValue={stage.expected_end_date || ""}
-                  />
-                </label>
-                <label className="grid gap-1 text-sm">
-                  Status
-                  <select
-                    className="h-9 rounded-lg border border-input bg-background px-3"
-                    name="status"
-                    defaultValue={stage.status}
-                  >
-                    <option value="ativo">Ativa</option>
-                    <option value="inativo">Inativa</option>
-                  </select>
-                </label>
-                <label className="grid gap-1 text-sm">
-                  Descrição
-                  <textarea
-                    className="min-h-16 rounded-lg border border-input bg-transparent p-2"
-                    name="descricao"
-                    defaultValue={stage.description || ""}
-                  />
-                </label>
-                <label className="grid gap-1 text-sm md:col-span-2">
-                  Observações
-                  <textarea
-                    className="min-h-16 rounded-lg border border-input bg-transparent p-2"
-                    name="observacoes"
-                    defaultValue={stage.notes || ""}
-                  />
-                </label>
-                <div className="md:col-span-2">
-                  <Button size="sm" type="submit">
-                    Salvar alterações
-                  </Button>
-                </div>
-              </form>
-            </details>
-          ))}
         </CardContent>
       </Card>
     </RegisterPageShell>

@@ -150,6 +150,10 @@ function databaseMessage(error: { message?: string } | null) {
     "Projeto não encontrado",
     "A descrição da despesa é obrigatória",
     "Informe um valor de despesa maior que zero",
+    "Cotação não encontrada",
+    "A justificativa da reprovação é obrigatória",
+    "Apenas cotações em análise podem ser reprovadas",
+    "Sem permissão para reprovar cotação neste projeto",
     "A etapa precisa estar ativa e pertencer ao projeto informado",
     "A categoria precisa estar ativa, pertencer ao projeto e aceitar saídas",
     "Fornecedor inválido ou inativo",
@@ -348,7 +352,7 @@ export async function createQuotation(formData: FormData) {
       warranty: readText(formData, "garantia"),
       notes: readText(formData, "observacoes"),
       drive_document_url: readGoogleDriveUrl(formData, "link_drive"),
-      status: readText(formData, "status", true),
+      status: "em_analise",
     });
     const message = databaseMessage(error);
     if (message) throw new Error(message);
@@ -384,6 +388,34 @@ export async function approveQuotation(formData: FormData) {
     revalidateProjectContext(returnTo);
   } catch (error) { fail(returnTo, error); }
   redirect(`${returnTo}?mensagem=Cotação+aprovada+e+orçamento+gerado+com+sucesso.`);
+}
+
+export async function rejectQuotation(formData: FormData) {
+  const returnTo = returnPath(formData, "/comparar-cotacoes");
+  try {
+    const quotationId = readText(formData, "cotacao_id", true);
+    const justification = readText(formData, "justificativa", true);
+    const supabase = await createClient();
+    const { data: quotation, error: quotationError } = await supabase
+      .from("quotations")
+      .select("project_id")
+      .eq("id", quotationId!)
+      .maybeSingle();
+    if (quotationError || !quotation) throw new Error("Cotação não encontrada.");
+    await currentProjectProfile(["admin", "financeiro", "aprovador"], quotation.project_id);
+    const { error } = await supabase.rpc("reject_quotation", {
+      target_quotation_id: quotationId,
+      justification,
+    });
+    const message = databaseMessage(error);
+    if (message) throw new Error(message);
+    revalidatePath("/cotacoes");
+    revalidatePath("/comparar-cotacoes");
+    revalidatePath("/dashboard");
+    revalidatePath("/historico");
+    revalidateProjectContext(returnTo);
+  } catch (error) { fail(returnTo, error); }
+  redirect(`${returnTo}?mensagem=Cotação+reprovada+e+encerrada+com+sucesso.`);
 }
 
 export async function resolveBudgetRecipient(formData: FormData) {
@@ -629,30 +661,43 @@ export async function updateCategory(formData: FormData) {
 export async function updateSupplier(formData: FormData) {
   const returnTo = returnPath(formData, "/fornecedores");
   try {
-    const profile = await currentProfile(["admin"]); const supabase = await createClient();
+    const profile = await currentProfile(["admin"]);
+    const supabase = await createClient();
+    const categoryId = readText(formData, "categoria_principal_id");
+    const personType = readText(formData, "tipo_pessoa");
+    const status = readText(formData, "status", true);
+    if (personType && !["pessoa_juridica", "pessoa_fisica", "outro"].includes(personType)) {
+      throw new Error("Selecione um tipo de pessoa válido.");
+    }
+    if (!status || !["ativo", "inativo", "bloqueado"].includes(status)) {
+      throw new Error("Selecione um status de fornecedor válido.");
+    }
+    if (categoryId) {
+      const { data: category, error: categoryError } = await supabase
+        .from("categories")
+        .select("id")
+        .eq("id", categoryId)
+        .maybeSingle();
+      if (categoryError || !category) {
+        throw new Error("A categoria principal selecionada não está disponível.");
+      }
+    }
     await ensureUpdated(supabase.from("suppliers").update({
-      name: readText(formData, "nome", true), main_contact: readText(formData, "contato"), phone: readText(formData, "telefone"),
-      email: readText(formData, "email"), status: readText(formData, "status", true), notes: readText(formData, "observacoes"), updated_by: profile.id,
+      name: readText(formData, "nome", true),
+      person_type: personType,
+      document: readText(formData, "documento"),
+      main_contact: readText(formData, "contato"),
+      phone: readText(formData, "telefone"),
+      email: readText(formData, "email"),
+      address: readText(formData, "endereco"),
+      main_category_id: categoryId,
+      status,
+      notes: readText(formData, "observacoes"),
+      updated_by: profile.id,
     }).eq("id", readText(formData, "fornecedor_id", true)).select("id"));
     revalidatePath("/fornecedores"); revalidatePath("/historico"); revalidateProjectContext(returnTo);
   } catch (error) { fail(returnTo, error); }
   redirect(`${returnTo}?mensagem=Fornecedor+atualizado+com+sucesso.`);
-}
-
-export async function finishQuotation(formData: FormData) {
-  const returnTo = returnPath(formData, "/cotacoes");
-  try {
-    await currentProjectProfileFromForm(formData, ["admin", "financeiro", "aprovador"]);
-    const quotationId = readText(formData, "cotacao_id", true);
-    const status = readText(formData, "status", true)!;
-    const justification = readText(formData, "justificativa", true);
-    if (!["nao_selecionada", "cancelada"].includes(status)) throw new Error("Status de cotação inválido.");
-    const supabase = await createClient();
-    const { error } = await supabase.rpc("finish_quotation", { target_quotation_id: quotationId, target_status: status, justification });
-    const message = databaseMessage(error); if (message) throw new Error(message);
-    revalidatePath("/cotacoes"); revalidatePath("/comparar-cotacoes"); revalidatePath("/historico"); revalidateProjectContext(returnTo);
-  } catch (error) { fail(returnTo, error); }
-  redirect(`${returnTo}?mensagem=Cotação+encerrada+e+histórico+registrado.`);
 }
 
 export async function cancelExpense(formData: FormData) {

@@ -1,7 +1,7 @@
 import { Scale } from "lucide-react";
 import { redirect } from "next/navigation";
 
-import { approveQuotation } from "@/lib/actions/base-registers";
+import { approveQuotation, rejectQuotation } from "@/lib/actions/base-registers";
 import { RegisterPageShell } from "@/components/modules/register-page-shell";
 import { Pagination, paginate } from "@/components/modules/pagination";
 import { Badge } from "@/components/ui/badge";
@@ -22,11 +22,11 @@ const money = new Intl.NumberFormat("pt-BR", {
   style: "currency",
   currency: "BRL",
 });
-const statuses = ["recebida", "em_analise", "aprovada_para_orcamento"] as const;
+const statuses = ["em_analise", "aprovada", "reprovada"] as const;
 const statusLabel: Record<(typeof statuses)[number], string> = {
-  recebida: "Recebida",
   em_analise: "Em análise",
-  aprovada_para_orcamento: "Aprovada",
+  aprovada: "Aprovada",
+  reprovada: "Reprovada",
 };
 const isValidMonth = (value?: string) =>
   /^\d{4}-(0[1-9]|1[0-2])$/.test(value ?? "");
@@ -70,7 +70,7 @@ export default async function CompareQuotationsPage({
           supabase
             .from("quotations")
             .select(
-              "id, project_id, stage_id, category_id, title, proponent_name, total_value, execution_deadline, quotation_date, payment_method, payment_terms, included_scope, excluded_scope, warranty, drive_document_url, status, projects(name), project_stages(name), categories(name)",
+              "id, project_id, stage_id, category_id, title, proponent_name, total_value, execution_deadline, quotation_date, payment_method, payment_terms, included_scope, excluded_scope, warranty, drive_document_url, status, rejection_justification, projects(name), project_stages(name), categories(name)",
             )
             .eq("project_id", lockedProjectId)
             .in("status", statuses)
@@ -239,30 +239,50 @@ export default async function CompareQuotationsPage({
                       </a>
                     ) : null}
                   </div>
-                  {item.status !== "aprovada_para_orcamento" ? (
-                    <form
-                      action={approveQuotation}
-                      className="space-y-2 border-t pt-4"
-                    >
-                      <input name="cotacao_id" type="hidden" value={item.id} />
-                      <input name="projeto_id" type="hidden" value={lockedProjectId} />
-                      <input name="retorno" type="hidden" value={`/projetos/${lockedProjectId}/comparar-cotacoes`} />
-                      <label className="grid gap-1.5 text-sm font-medium">
-                        Justificativa da escolha *
-                        <textarea
-                          className="min-h-20 rounded-lg border border-input bg-transparent p-3 text-sm"
-                          name="justificativa"
-                          required
-                          maxLength={2000}
-                          placeholder="Registre os critérios humanos que fundamentam a escolha."
-                        />
-                      </label>
-                      <Button type="submit">Aprovar e gerar orçamento</Button>
-                    </form>
-                  ) : (
+                  {item.status === "em_analise" ? (
+                    <div className="grid gap-3 border-t pt-4 lg:grid-cols-2">
+                      <form action={approveQuotation} className="space-y-2">
+                        <input name="cotacao_id" type="hidden" value={item.id} />
+                        <input name="projeto_id" type="hidden" value={lockedProjectId} />
+                        <input name="retorno" type="hidden" value={`/projetos/${lockedProjectId}/comparar-cotacoes`} />
+                        <label className="grid gap-1.5 text-sm font-medium">
+                          Justificativa da escolha *
+                          <textarea
+                            className="min-h-20 rounded-lg border border-input bg-transparent p-3 text-sm"
+                            name="justificativa"
+                            required
+                            maxLength={2000}
+                            placeholder="Registre os critérios humanos que fundamentam a escolha."
+                          />
+                        </label>
+                        <Button type="submit">Aprovar e gerar orçamento</Button>
+                      </form>
+                      <form action={rejectQuotation} className="space-y-2 rounded-lg border border-destructive/30 bg-destructive/5 p-3">
+                        <input name="cotacao_id" type="hidden" value={item.id} />
+                        <input name="projeto_id" type="hidden" value={lockedProjectId} />
+                        <input name="retorno" type="hidden" value={`/projetos/${lockedProjectId}/comparar-cotacoes`} />
+                        <label className="grid gap-1.5 text-sm font-medium">
+                          Justificativa da reprovação *
+                          <textarea
+                            className="min-h-20 rounded-lg border border-input bg-background p-3 text-sm"
+                            name="justificativa"
+                            required
+                            maxLength={2000}
+                            placeholder="Registre por que esta proposta foi reprovada."
+                          />
+                        </label>
+                        <Button type="submit" variant="destructive">Reprovar cotação</Button>
+                      </form>
+                    </div>
+                  ) : item.status === "aprovada" ? (
                     <p className="rounded-lg bg-muted px-3 py-2 text-sm">
                       Esta cotação já gerou um orçamento.
                     </p>
+                  ) : (
+                    <div className="rounded-lg border border-destructive/25 bg-destructive/5 px-3 py-2 text-sm">
+                      <p className="font-medium text-destructive">Esta cotação foi reprovada e está encerrada.</p>
+                      <p className="mt-1 break-words text-muted-foreground">{item.rejection_justification || "Justificativa não disponível."}</p>
+                    </div>
                   )}
                 </CardContent>
               </Card>

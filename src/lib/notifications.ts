@@ -15,7 +15,7 @@ export async function getOperationalNotifications(role?: UserRole, projectId?: s
   const supabase = await createClient();
   const basePath = `/projetos/${projectId}`;
   const [quotationsResult, budgetsResult, expensesResult] = await Promise.all([
-    supabase.from("quotations").select("id").eq("project_id", projectId).in("status", ["recebida", "em_analise"]),
+    supabase.from("quotations").select("id").eq("project_id", projectId).eq("status", "em_analise"),
     supabase.from("budgets").select("id, status").eq("project_id", projectId).in("status", ["fornecedor_pendente", "aguardando_aprovacao_financeira"]),
     supabase.from("expenses").select("id").eq("project_id", projectId).in("status", ["aprovada", "parcialmente_paga"]),
   ]);

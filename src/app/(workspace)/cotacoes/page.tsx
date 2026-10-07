@@ -1,6 +1,6 @@
 import { ReceiptText } from "lucide-react";
 
-import { createQuotation, finishQuotation } from "@/lib/actions/base-registers";
+import { createQuotation } from "@/lib/actions/base-registers";
 import { RegisterPageShell } from "@/components/modules/register-page-shell";
 import { Pagination, paginate } from "@/components/modules/pagination";
 import { Badge } from "@/components/ui/badge";
@@ -30,12 +30,9 @@ const money = new Intl.NumberFormat("pt-BR", {
   currency: "BRL",
 });
 const statusLabel: Record<string, string> = {
-  recebida: "Recebida",
   em_analise: "Em análise",
-  aprovada_para_orcamento: "Aprovada",
-  nao_selecionada: "Não selecionada",
-  cancelada: "Cancelada",
-  vencida: "Vencida",
+  aprovada: "Aprovada",
+  reprovada: "Reprovada",
 };
 
 export default async function QuotationsPage({
@@ -282,17 +279,9 @@ export default async function QuotationsPage({
               maxLength={500}
             />
           </label>
-          <label className="grid gap-1.5 text-sm font-medium">
-            Status *
-            <select
-              className="h-9 rounded-lg border border-input bg-transparent px-3 text-sm"
-              name="status"
-              defaultValue="recebida"
-            >
-              <option value="recebida">Recebida</option>
-              <option value="em_analise">Em análise</option>
-            </select>
-          </label>
+          <p className="self-end rounded-lg bg-muted px-3 py-2 text-sm text-muted-foreground">
+            Novas cotações começam em <strong>Em análise</strong>.
+          </p>
           <label className="grid gap-1.5 text-sm font-medium md:col-span-2">
             Escopo incluso
             <textarea
@@ -419,64 +408,6 @@ export default async function QuotationsPage({
               />
             </>
           )}
-        </CardContent>
-      </Card>
-      <Card>
-        <CardHeader>
-          <CardTitle>Encerrar cotação</CardTitle>
-          <CardDescription>
-            Registre propostas não selecionadas ou canceladas com justificativa.
-            Cotações aprovadas não podem ser alteradas aqui.
-          </CardDescription>
-        </CardHeader>
-        <CardContent className="grid gap-3">
-          {quotationPage.items
-            .filter((item) => ["recebida", "em_analise"].includes(item.status))
-            .map((item) => (
-              <form
-                key={item.id}
-                action={finishQuotation}
-                className="grid gap-3 rounded-lg border p-3 md:grid-cols-[minmax(0,1fr)_180px_minmax(220px,1fr)_auto] md:items-end"
-              >
-                <input name="cotacao_id" type="hidden" value={item.id} />
-                {projectId ? <input name="projeto_id" type="hidden" value={projectId} /> : null}
-                {returnTo ? <input name="retorno" type="hidden" value={returnTo} /> : null}
-                <div>
-                  <p className="font-medium">{item.title}</p>
-                  <p className="text-sm text-muted-foreground">
-                    {item.proponent_name}
-                  </p>
-                </div>
-                <label className="grid gap-1 text-sm">
-                  Resultado
-                  <select
-                    className="h-9 rounded-lg border border-input bg-background px-3"
-                    name="status"
-                    defaultValue="nao_selecionada"
-                  >
-                    <option value="nao_selecionada">Não selecionada</option>
-                    <option value="cancelada">Cancelada</option>
-                  </select>
-                </label>
-                <label className="grid gap-1 text-sm">
-                  Justificativa
-                  <textarea
-                    className="min-h-9 rounded-lg border border-input bg-transparent p-2"
-                    name="justificativa"
-                    required
-                    maxLength={1000}
-                  />
-                </label>
-                <Button type="submit">Registrar</Button>
-              </form>
-            ))}
-          {quotations.every(
-            (item) => !["recebida", "em_analise"].includes(item.status),
-          ) ? (
-            <p className="text-sm text-muted-foreground">
-              Não há cotações em análise para encerrar.
-            </p>
-          ) : null}
         </CardContent>
       </Card>
     </RegisterPageShell>

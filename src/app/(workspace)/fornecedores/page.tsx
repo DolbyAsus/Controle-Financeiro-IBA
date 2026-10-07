@@ -1,6 +1,7 @@
 import { Building2 } from "lucide-react";
 
-import { createSupplier, linkSupplierToProject, updateSupplier } from "@/lib/actions/base-registers";
+import { createSupplier, linkSupplierToProject } from "@/lib/actions/base-registers";
+import { SupplierEditDialog } from "@/components/suppliers/supplier-edit-dialog";
 import { RegisterPageShell } from "@/components/modules/register-page-shell";
 import { Pagination, paginate } from "@/components/modules/pagination";
 import { Badge } from "@/components/ui/badge";
@@ -23,6 +24,7 @@ import {
 } from "@/components/ui/table";
 import { isSupabaseConfigured } from "@/lib/supabase/config";
 import { createClient } from "@/lib/supabase/server";
+import { getWorkspaceProfile } from "@/lib/project-access";
 
 export const dynamic = "force-dynamic";
 
@@ -35,19 +37,19 @@ export default async function SuppliersPage({
   const projectId = query.projeto;
   const returnTo = projectId ? `/projetos/${projectId}/fornecedores` : undefined;
   const supabase = isSupabaseConfigured() ? await createClient() : null;
+  const profile = supabase ? await getWorkspaceProfile() : null;
+  const canManageSuppliers = profile?.role === "admin";
   const categories = supabase
     ? ((
         await (projectId
           ? supabase
               .from("categories")
-              .select("id, name, projects(name)")
+              .select("id, name, status, projects(name)")
               .eq("project_id", projectId)
-              .eq("status", "ativo")
               .order("name")
           : supabase
           .from("categories")
-          .select("id, name, projects(name)")
-          .eq("status", "ativo")
+          .select("id, name, status, projects(name)")
           .order("name"))
       ).data ?? [])
     : [];
@@ -60,7 +62,7 @@ export default async function SuppliersPage({
         await supabase
           .from("suppliers")
           .select(
-            "id, name, person_type, document, main_contact, phone, email, status, notes, categories(name)",
+            "id, name, person_type, document, main_contact, phone, email, address, main_category_id, status, notes, categories(name)",
           )
           .order("name")
       ).data ?? [])
@@ -72,6 +74,49 @@ export default async function SuppliersPage({
     ? allSuppliers.filter((supplier) => !linkedSupplierIds.includes(supplier.id) && supplier.status === "ativo")
     : [];
   const supplierPage = paginate(suppliers, query.pagina);
+  const pageSupplierIds = supplierPage.items.map((supplier) => supplier.id);
+  let linkedQuotations: {
+    id: string; supplier_id: string; title: string; total_value: number | string; status: string; projects: { name: string }[] | null;
+  }[] = [];
+  let linkedBudgets: {
+    id: string; supplier_id: string; title: string; budget_value: number | string; status: string; projects: { name: string }[] | null;
+  }[] = [];
+  let linkedExpenses: {
+    id: string; supplier_id: string; description: string; approved_value: number | string; status: string; projects: { name: string }[] | null;
+  }[] = [];
+  if (supabase && pageSupplierIds.length > 0) {
+    const quotationsQuery = supabase
+      .from("quotations")
+      .select("id, supplier_id, title, total_value, status, projects(name)")
+      .in("supplier_id", pageSupplierIds)
+      .order("created_at", { ascending: false })
+      .limit(100);
+    const budgetsQuery = supabase
+      .from("budgets")
+      .select("id, supplier_id, title, budget_value, status, projects(name)")
+      .in("supplier_id", pageSupplierIds)
+      .order("created_at", { ascending: false })
+      .limit(100);
+    const expensesQuery = supabase
+      .from("expenses")
+      .select("id, supplier_id, description, approved_value, status, projects(name)")
+      .in("supplier_id", pageSupplierIds)
+      .order("created_at", { ascending: false })
+      .limit(100);
+    if (projectId) {
+      quotationsQuery.eq("project_id", projectId);
+      budgetsQuery.eq("project_id", projectId);
+      expensesQuery.eq("project_id", projectId);
+    }
+    const [quotationsResult, budgetsResult, expensesResult] = await Promise.all([
+      quotationsQuery,
+      budgetsQuery,
+      expensesQuery,
+    ]);
+    linkedQuotations = quotationsResult.data ?? [];
+    linkedBudgets = budgetsResult.data ?? [];
+    linkedExpenses = expensesResult.data ?? [];
+  }
   return (
     <RegisterPageShell
       title="Fornecedores"
@@ -139,7 +184,7 @@ export default async function SuppliersPage({
               defaultValue=""
             >
               <option value="">Não informada</option>
-              {categories.map((category) => (
+              {categories.filter((category) => category.status === "ativo").map((category) => (
                 <option key={category.id} value={category.id}>
                   {category.name}
                   {category.projects?.[0]?.name
@@ -236,6 +281,18 @@ export default async function SuppliersPage({
                         supplier.phone ||
                         "Sem contato informado"}
                     </p>
+                    {canManageSuppliers ? (
+                      <div className="mt-3">
+                        <SupplierEditDialog
+                          supplier={supplier}
+                          categories={categories}
+                          quotations={linkedQuotations.filter((item) => item.supplier_id === supplier.id).map((item) => ({ id: item.id, title: item.title, value: item.total_value, status: item.status, projectName: item.projects?.[0]?.name || "Projeto" }))}
+                          budgets={linkedBudgets.filter((item) => item.supplier_id === supplier.id).map((item) => ({ id: item.id, title: item.title, value: item.budget_value, status: item.status, projectName: item.projects?.[0]?.name || "Projeto" }))}
+                          expenses={linkedExpenses.filter((item) => item.supplier_id === supplier.id).map((item) => ({ id: item.id, title: item.description, value: item.approved_value, status: item.status, projectName: item.projects?.[0]?.name || "Projeto" }))}
+                          returnTo={returnTo}
+                        />
+                      </div>
+                    ) : null}
                   </article>
                 ))}
               </div>
@@ -248,6 +305,7 @@ export default async function SuppliersPage({
                       <TableHead>Telefone</TableHead>
                       <TableHead>Categoria</TableHead>
                       <TableHead>Status</TableHead>
+                      {canManageSuppliers ? <TableHead>Ações</TableHead> : null}
                     </TableRow>
                   </TableHeader>
                   <TableBody>
@@ -266,6 +324,18 @@ export default async function SuppliersPage({
                         <TableCell>
                           <Badge variant="secondary">{supplier.status}</Badge>
                         </TableCell>
+                        {canManageSuppliers ? (
+                          <TableCell>
+                            <SupplierEditDialog
+                              supplier={supplier}
+                              categories={categories}
+                              quotations={linkedQuotations.filter((item) => item.supplier_id === supplier.id).map((item) => ({ id: item.id, title: item.title, value: item.total_value, status: item.status, projectName: item.projects?.[0]?.name || "Projeto" }))}
+                              budgets={linkedBudgets.filter((item) => item.supplier_id === supplier.id).map((item) => ({ id: item.id, title: item.title, value: item.budget_value, status: item.status, projectName: item.projects?.[0]?.name || "Projeto" }))}
+                              expenses={linkedExpenses.filter((item) => item.supplier_id === supplier.id).map((item) => ({ id: item.id, title: item.description, value: item.approved_value, status: item.status, projectName: item.projects?.[0]?.name || "Projeto" }))}
+                              returnTo={returnTo}
+                            />
+                          </TableCell>
+                        ) : null}
                       </TableRow>
                     ))}
                   </TableBody>
@@ -278,86 +348,6 @@ export default async function SuppliersPage({
               />
             </>
           )}
-        </CardContent>
-      </Card>
-      <Card>
-        <CardHeader>
-          <CardTitle>Editar, inativar ou bloquear fornecedor</CardTitle>
-          <CardDescription>
-            O histórico de cotações e despesas permanece preservado quando um
-            fornecedor deixa de estar disponível.
-          </CardDescription>
-        </CardHeader>
-        <CardContent className="grid gap-3">
-          {supplierPage.items.map((supplier) => (
-            <details key={supplier.id} className="rounded-lg border p-3">
-              <summary className="cursor-pointer font-medium">
-                {supplier.name}{" "}
-                <span className="text-sm font-normal text-muted-foreground">
-                  · {supplier.status}
-                </span>
-              </summary>
-              <form
-                action={updateSupplier}
-                className="mt-3 grid gap-3 md:grid-cols-2"
-              >
-                <input name="fornecedor_id" type="hidden" value={supplier.id} />
-                {returnTo ? <input name="retorno" type="hidden" value={returnTo} /> : null}
-                <label className="grid gap-1 text-sm">
-                  Nome
-                  <Input name="nome" required defaultValue={supplier.name} />
-                </label>
-                <label className="grid gap-1 text-sm">
-                  Contato
-                  <Input
-                    name="contato"
-                    defaultValue={supplier.main_contact || ""}
-                  />
-                </label>
-                <label className="grid gap-1 text-sm">
-                  Telefone
-                  <Input
-                    name="telefone"
-                    type="tel"
-                    defaultValue={supplier.phone || ""}
-                  />
-                </label>
-                <label className="grid gap-1 text-sm">
-                  E-mail
-                  <Input
-                    name="email"
-                    type="email"
-                    defaultValue={supplier.email || ""}
-                  />
-                </label>
-                <label className="grid gap-1 text-sm">
-                  Status
-                  <select
-                    className="h-9 rounded-lg border border-input bg-background px-3"
-                    name="status"
-                    defaultValue={supplier.status}
-                  >
-                    <option value="ativo">Ativo</option>
-                    <option value="inativo">Inativo</option>
-                    <option value="bloqueado">Bloqueado</option>
-                  </select>
-                </label>
-                <label className="grid gap-1 text-sm">
-                  Observações
-                  <textarea
-                    className="min-h-16 rounded-lg border border-input bg-transparent p-2"
-                    name="observacoes"
-                    defaultValue={supplier.notes || ""}
-                  />
-                </label>
-                <div className="md:col-span-2">
-                  <Button size="sm" type="submit">
-                    Salvar alterações
-                  </Button>
-                </div>
-              </form>
-            </details>
-          ))}
         </CardContent>
       </Card>
     </RegisterPageShell>

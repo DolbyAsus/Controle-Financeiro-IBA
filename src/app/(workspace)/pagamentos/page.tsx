@@ -129,6 +129,8 @@ export default async function PaymentsPage({
       title="Pagamentos"
       description="Cada pagamento é uma parcela vinculada a uma despesa e ao seu destinatário. O banco recalcula saldo e status automaticamente."
       icon={BanknoteArrowDown}
+      createLabel="Registrar pagamento"
+      formTitle="Nova parcela de pagamento"
       message={query.mensagem}
       error={query.erro}
       form={

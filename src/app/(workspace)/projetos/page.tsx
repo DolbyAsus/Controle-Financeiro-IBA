@@ -150,6 +150,8 @@ export default async function ProjectsPage({
       title="Projetos"
       description="Organize projetos financeiros independentes da Igreja Batista da Aliança."
       icon={FolderKanban}
+      createLabel="Criar projeto"
+      formTitle="Novo projeto"
       message={query.mensagem}
       error={query.erro}
       form={

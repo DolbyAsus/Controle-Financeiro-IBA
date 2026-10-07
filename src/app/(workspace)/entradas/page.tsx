@@ -93,6 +93,8 @@ export default async function IncomePage({
       title="Entradas"
       description="Registre recursos já recebidos. Entradas atualizam o dashboard e o relatório mensal."
       icon={BanknoteArrowUp}
+      createLabel="Registrar entrada"
+      formTitle="Nova entrada recebida"
       message={query.mensagem}
       error={query.erro}
       form={

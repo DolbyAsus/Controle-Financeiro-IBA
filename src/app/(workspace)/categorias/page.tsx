@@ -66,6 +66,8 @@ export default async function CategoriesPage({
       title="Categorias"
       description="Classifique entradas, saídas e lançamentos de cada projeto."
       icon={Tags}
+      createLabel="Criar categoria"
+      formTitle="Nova categoria"
       message={query.mensagem}
       error={query.erro}
       form={

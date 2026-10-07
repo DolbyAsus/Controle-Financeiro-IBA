@@ -169,6 +169,9 @@ export default async function CompareQuotationsPage({
       title="Comparar cotações"
       description="Consulte as propostas deste projeto lado a lado. O sistema não recomenda uma opção: a decisão é da comissão."
       icon={Scale}
+      formMode="inline"
+      formTitle="Filtros de comparação"
+      formDescription="Refine as propostas exibidas antes de registrar uma decisão."
       message={query.mensagem}
       error={query.erro}
       form={filter}

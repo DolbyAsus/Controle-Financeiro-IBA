@@ -141,6 +141,8 @@ export default async function ExpensesPage({
       title="Despesas"
       description="Registre despesas manualmente ou aprove um orçamento. Toda despesa exige um destinatário e pode receber pagamentos parciais."
       icon={CreditCard}
+      createLabel="Criar despesa"
+      formTitle="Nova despesa manual"
       message={query.mensagem}
       error={query.erro}
       form={

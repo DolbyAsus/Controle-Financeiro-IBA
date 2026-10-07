@@ -3,6 +3,7 @@ import { Building2 } from "lucide-react";
 import { createSupplier, linkSupplierToProject } from "@/lib/actions/base-registers";
 import { SupplierEditDialog } from "@/components/suppliers/supplier-edit-dialog";
 import { RegisterPageShell } from "@/components/modules/register-page-shell";
+import { CreateRecordDialog } from "@/components/modules/create-record-dialog";
 import { Pagination, paginate } from "@/components/modules/pagination";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -122,6 +123,8 @@ export default async function SuppliersPage({
       title="Fornecedores"
       description="Mantenha fornecedores, contatos e categoria principal para futuras cotações."
       icon={Building2}
+      createLabel="Criar fornecedor"
+      formTitle="Novo fornecedor"
       message={query.mensagem}
       error={query.erro}
       form={
@@ -237,18 +240,25 @@ export default async function SuppliersPage({
             </CardDescription>
           </CardHeader>
           <CardContent>
-            <form action={linkSupplierToProject} className="flex flex-col gap-3 sm:flex-row sm:items-end">
-              <input name="projeto_id" type="hidden" value={projectId} />
-              <input name="retorno" type="hidden" value={returnTo} />
-              <label className="grid flex-1 gap-1.5 text-sm font-medium">
-                Fornecedor disponível
-                <select className="h-9 rounded-lg border border-input bg-transparent px-3 text-sm" name="fornecedor_existente_id" required defaultValue="">
-                  <option disabled value="">Selecione</option>
-                  {unlinkedSuppliers.map((supplier) => <option key={supplier.id} value={supplier.id}>{supplier.name}</option>)}
-                </select>
-              </label>
-              <Button type="submit" variant="outline" disabled={unlinkedSuppliers.length === 0}>Vincular</Button>
-            </form>
+            <CreateRecordDialog
+              buttonLabel="Vincular fornecedor"
+              title="Vincular fornecedor ao projeto"
+              description="O cadastro mestre será reutilizado sem duplicar dados."
+              disabled={unlinkedSuppliers.length === 0}
+            >
+              <form action={linkSupplierToProject} className="grid gap-4">
+                <input name="projeto_id" type="hidden" value={projectId} />
+                <input name="retorno" type="hidden" value={returnTo} />
+                <label className="grid gap-1.5 text-sm font-medium">
+                  Fornecedor disponível
+                  <select className="h-9 rounded-lg border border-input bg-transparent px-3 text-sm" name="fornecedor_existente_id" required defaultValue="">
+                    <option disabled value="">Selecione</option>
+                    {unlinkedSuppliers.map((supplier) => <option key={supplier.id} value={supplier.id}>{supplier.name}</option>)}
+                  </select>
+                </label>
+                <div><Button type="submit">Vincular fornecedor</Button></div>
+              </form>
+            </CreateRecordDialog>
             {unlinkedSuppliers.length === 0 ? <p className="mt-2 text-xs text-muted-foreground">Não há outro fornecedor ativo disponível para vínculo.</p> : null}
           </CardContent>
         </Card>

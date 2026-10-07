@@ -6,6 +6,7 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Pagination, paginate } from "@/components/modules/pagination";
+import { CreateRecordDialog } from "@/components/modules/create-record-dialog";
 import { createProject } from "@/lib/actions/base-registers";
 import { getAccessibleProjects, getWorkspaceProfile } from "@/lib/project-access";
 
@@ -19,19 +20,13 @@ const statusLabel: Record<string, string> = {
   cancelado: "Cancelado",
 };
 
-function CreateProjectPanel() {
+function CreateProjectDialog() {
   return (
-    <Card className="border-primary/20 bg-primary/[0.03]">
-      <CardHeader>
-        <CardTitle className="flex items-center gap-2 text-base">
-          <PlusCircle className="size-5 text-primary" aria-hidden="true" />
-          Criar novo projeto
-        </CardTitle>
-        <CardDescription>
-          O novo projeto ficará disponível para sua operação imediatamente.
-        </CardDescription>
-      </CardHeader>
-      <CardContent>
+    <CreateRecordDialog
+      buttonLabel="Criar novo projeto"
+      title="Novo projeto"
+      description="O novo projeto ficará disponível para sua operação imediatamente. Campos marcados com * são obrigatórios."
+    >
         <form action={createProject} className="grid gap-4 md:grid-cols-2">
           <input name="retorno" type="hidden" value="/selecionar-projeto" />
           <label className="grid gap-1.5 text-sm font-medium">
@@ -79,8 +74,7 @@ function CreateProjectPanel() {
             </Button>
           </div>
         </form>
-      </CardContent>
-    </Card>
+    </CreateRecordDialog>
   );
 }
 
@@ -120,7 +114,7 @@ export default async function SelectProjectPage({
               <Button variant="outline" render={<Link href="/admin/resumo-geral" />}>Ver resumo geral</Button>
             </CardContent>
           </Card>
-          <CreateProjectPanel />
+          <CreateProjectDialog />
         </>
       ) : null}
 

@@ -69,6 +69,8 @@ export default async function StagesPage({
       title="Etapas"
       description="Defina etapas, prazo e orçamento planejado para cada projeto."
       icon={ClipboardList}
+      createLabel="Criar etapa"
+      formTitle="Nova etapa"
       message={query.mensagem}
       error={query.erro}
       form={

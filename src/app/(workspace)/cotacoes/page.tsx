@@ -118,6 +118,8 @@ export default async function QuotationsPage({
       title="Cotações"
       description="Registre propostas. Projeto, etapa e categoria são obrigatórios; fornecedor pode ser informado depois."
       icon={ReceiptText}
+      createLabel="Criar cotação"
+      formTitle="Nova cotação"
       message={query.mensagem}
       error={query.erro}
       form={

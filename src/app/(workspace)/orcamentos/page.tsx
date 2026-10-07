@@ -98,6 +98,8 @@ export default async function BudgetsPage({
       title="Orçamentos"
       description="Cotações aprovadas chegam aqui. Financeiro/Admin define o destinatário e cria a despesa."
       icon={Landmark}
+      formMode="information"
+      formTitle="Como criar um orçamento"
       message={query.mensagem}
       error={query.erro}
       form={

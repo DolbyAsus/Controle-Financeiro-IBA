@@ -3,18 +3,23 @@ import type { LucideIcon } from "lucide-react";
 import { CircleAlert, CircleCheck } from "lucide-react";
 
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
+import { CreateRecordDialog } from "@/components/modules/create-record-dialog";
 
 type Props = {
   title: string;
   description: string;
   icon: LucideIcon;
   form: ReactNode;
+  createLabel?: string;
+  formTitle?: string;
+  formDescription?: string;
+  formMode?: "dialog" | "inline" | "information";
   children: ReactNode;
   message?: string;
   error?: string;
 };
 
-export function RegisterPageShell({ title, description, icon: Icon, form, children, message, error }: Props) {
+export function RegisterPageShell({ title, description, icon: Icon, form, children, message, error, createLabel = "Criar novo registro", formTitle, formDescription, formMode = "dialog" }: Props) {
   const safeMessage = message?.slice(0, 500);
   const safeError = error?.slice(0, 500);
   return (
@@ -26,10 +31,20 @@ export function RegisterPageShell({ title, description, icon: Icon, form, childr
       </section>
       {safeMessage ? <p role="status" className="flex break-words gap-2 rounded-lg border border-emerald-200 bg-emerald-50 px-3 py-2 text-sm text-emerald-800"><CircleCheck className="size-4 shrink-0" />{safeMessage}</p> : null}
       {safeError ? <p role="alert" className="flex break-words gap-2 rounded-lg border border-destructive/25 bg-destructive/10 px-3 py-2 text-sm text-destructive"><CircleAlert className="size-4 shrink-0" />{safeError}</p> : null}
-      <Card>
-        <CardHeader><CardTitle className="flex items-center gap-2"><Icon className="size-5 text-primary" />Novo registro</CardTitle><CardDescription>Campos marcados com * são obrigatórios.</CardDescription></CardHeader>
-        <CardContent>{form}</CardContent>
-      </Card>
+      {formMode === "dialog" ? (
+        <CreateRecordDialog
+          buttonLabel={createLabel}
+          title={formTitle || createLabel}
+          description={formDescription}
+        >
+          {form}
+        </CreateRecordDialog>
+      ) : (
+        <Card>
+          <CardHeader><CardTitle className="flex items-center gap-2"><Icon className="size-5 text-primary" />{formTitle || (formMode === "inline" ? "Filtros" : "Informações")}</CardTitle>{formDescription ? <CardDescription>{formDescription}</CardDescription> : null}</CardHeader>
+          <CardContent>{form}</CardContent>
+        </Card>
+      )}
       {children}
     </div>
   );

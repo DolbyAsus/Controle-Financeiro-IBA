@@ -65,6 +65,17 @@ export default async function StagesPage({
       ).data ?? [])
     : [];
   const stagePage = paginate(stages, query.pagina);
+  const visibleStageIds = stagePage.items.map((stage) => stage.id);
+  const [linkedQuotations, linkedBudgets, linkedExpenses] = supabase && visibleStageIds.length > 0
+    ? await Promise.all([
+        supabase.from("quotations").select("id, title, total_value, status, stage_id, projects(name)").in("stage_id", visibleStageIds),
+        supabase.from("budgets").select("id, title, budget_value, status, stage_id, projects(name)").in("stage_id", visibleStageIds),
+        supabase.from("expenses").select("id, description, approved_value, status, stage_id, projects(name)").in("stage_id", visibleStageIds),
+      ])
+    : [{ data: [] }, { data: [] }, { data: [] }];
+  const quotations = linkedQuotations.data ?? [];
+  const budgets = linkedBudgets.data ?? [];
+  const expenses = linkedExpenses.data ?? [];
   return (
     <RegisterPageShell
       title="Etapas"
@@ -213,7 +224,7 @@ export default async function StagesPage({
                       {stage.projects?.[0]?.name || "Projeto"} ·{" "}
                       {money.format(Number(stage.planned_budget))}
                     </p>
-                    <div className="mt-3"><StageEditDialog stage={stage} returnTo={returnTo} /></div>
+                    <div className="mt-3"><StageEditDialog stage={stage} quotations={quotations.filter((item) => item.stage_id === stage.id).map((item) => ({ id: item.id, title: item.title, value: item.total_value, status: item.status, projectName: item.projects?.[0]?.name || "Projeto" }))} budgets={budgets.filter((item) => item.stage_id === stage.id).map((item) => ({ id: item.id, title: item.title, value: item.budget_value, status: item.status, projectName: item.projects?.[0]?.name || "Projeto" }))} expenses={expenses.filter((item) => item.stage_id === stage.id).map((item) => ({ id: item.id, title: item.description, value: item.approved_value, status: item.status, projectName: item.projects?.[0]?.name || "Projeto" }))} returnTo={returnTo} /></div>
                   </article>
                 ))}
               </div>
@@ -246,7 +257,7 @@ export default async function StagesPage({
                         <TableCell>
                           <Badge variant="secondary">{stage.status}</Badge>
                         </TableCell>
-                        <TableCell className="text-right"><StageEditDialog stage={stage} returnTo={returnTo} /></TableCell>
+                        <TableCell className="text-right"><StageEditDialog stage={stage} quotations={quotations.filter((item) => item.stage_id === stage.id).map((item) => ({ id: item.id, title: item.title, value: item.total_value, status: item.status, projectName: item.projects?.[0]?.name || "Projeto" }))} budgets={budgets.filter((item) => item.stage_id === stage.id).map((item) => ({ id: item.id, title: item.title, value: item.budget_value, status: item.status, projectName: item.projects?.[0]?.name || "Projeto" }))} expenses={expenses.filter((item) => item.stage_id === stage.id).map((item) => ({ id: item.id, title: item.description, value: item.approved_value, status: item.status, projectName: item.projects?.[0]?.name || "Projeto" }))} returnTo={returnTo} /></TableCell>
                       </TableRow>
                     ))}
                   </TableBody>

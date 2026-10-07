@@ -1,6 +1,6 @@
 "use client";
 
-import { ClipboardList, Pencil } from "lucide-react";
+import { ClipboardList, Landmark, Pencil, ReceiptText, WalletCards } from "lucide-react";
 
 import { updateStage } from "@/lib/actions/base-registers";
 import { Button } from "@/components/ui/button";
@@ -14,6 +14,7 @@ import {
   DialogTrigger,
 } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
+import { LinkedRecordList, type LinkedRecord } from "@/components/modules/linked-record-list";
 
 type Stage = {
   id: string;
@@ -30,9 +31,15 @@ type Stage = {
 
 export function StageEditDialog({
   stage,
+  quotations,
+  budgets,
+  expenses,
   returnTo,
 }: {
   stage: Stage;
+  quotations: LinkedRecord[];
+  budgets: LinkedRecord[];
+  expenses: LinkedRecord[];
   returnTo?: string;
 }) {
   return (
@@ -61,6 +68,10 @@ export function StageEditDialog({
             <label className="grid gap-1.5 text-sm font-medium md:col-span-2">Observações<textarea className="min-h-20 rounded-lg border border-input bg-transparent p-3 text-sm" name="observacoes" maxLength={2000} defaultValue={stage.notes || ""} /></label>
             <div className="md:col-span-2"><Button type="submit">Salvar alterações</Button></div>
           </form>
+          <section className="mt-6 space-y-3 border-t pt-5" aria-labelledby={`vinculos-${stage.id}`}>
+            <h2 id={`vinculos-${stage.id}`} className="text-sm font-semibold">Registros vinculados à etapa</h2>
+            <div className="grid gap-3 lg:grid-cols-3"><LinkedRecordList title="Cotações" icon={ReceiptText} items={quotations} emptyMessage="Nenhuma cotação vinculada." /><LinkedRecordList title="Orçamentos" icon={Landmark} items={budgets} emptyMessage="Nenhum orçamento vinculado." /><LinkedRecordList title="Despesas" icon={WalletCards} items={expenses} emptyMessage="Nenhuma despesa vinculada." /></div>
+          </section>
         </DialogBody>
       </DialogContent>
     </Dialog>

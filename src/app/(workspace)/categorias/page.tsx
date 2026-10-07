@@ -62,6 +62,19 @@ export default async function CategoriesPage({
       ).data ?? [])
     : [];
   const categoryPage = paginate(categories, query.pagina);
+  const visibleCategoryIds = categoryPage.items.map((category) => category.id);
+  const [linkedQuotations, linkedBudgets, linkedExpenses, linkedIncomes] = supabase && visibleCategoryIds.length > 0
+    ? await Promise.all([
+        supabase.from("quotations").select("id, title, total_value, status, category_id, projects(name)").in("category_id", visibleCategoryIds),
+        supabase.from("budgets").select("id, title, budget_value, status, category_id, projects(name)").in("category_id", visibleCategoryIds),
+        supabase.from("expenses").select("id, description, approved_value, status, category_id, projects(name)").in("category_id", visibleCategoryIds),
+        supabase.from("income_entries").select("id, origin, amount, status, category_id, projects(name)").in("category_id", visibleCategoryIds),
+      ])
+    : [{ data: [] }, { data: [] }, { data: [] }, { data: [] }];
+  const quotations = linkedQuotations.data ?? [];
+  const budgets = linkedBudgets.data ?? [];
+  const expenses = linkedExpenses.data ?? [];
+  const incomes = linkedIncomes.data ?? [];
   return (
     <RegisterPageShell
       title="Categorias"
@@ -172,7 +185,7 @@ export default async function CategoriesPage({
                       {category.projects?.[0]?.name || "Projeto"} ·{" "}
                       {category.status}
                     </p>
-                    <div className="mt-3"><CategoryEditDialog category={category} returnTo={returnTo} /></div>
+                    <div className="mt-3"><CategoryEditDialog category={category} quotations={quotations.filter((item) => item.category_id === category.id).map((item) => ({ id: item.id, title: item.title, value: item.total_value, status: item.status, projectName: item.projects?.[0]?.name || "Projeto" }))} budgets={budgets.filter((item) => item.category_id === category.id).map((item) => ({ id: item.id, title: item.title, value: item.budget_value, status: item.status, projectName: item.projects?.[0]?.name || "Projeto" }))} expenses={expenses.filter((item) => item.category_id === category.id).map((item) => ({ id: item.id, title: item.description, value: item.approved_value, status: item.status, projectName: item.projects?.[0]?.name || "Projeto" }))} incomes={incomes.filter((item) => item.category_id === category.id).map((item) => ({ id: item.id, title: item.origin, value: item.amount, status: item.status, projectName: item.projects?.[0]?.name || "Projeto" }))} returnTo={returnTo} /></div>
                   </article>
                 ))}
               </div>
@@ -202,7 +215,7 @@ export default async function CategoriesPage({
                           </Badge>
                         </TableCell>
                         <TableCell>{category.status}</TableCell>
-                        <TableCell className="text-right"><CategoryEditDialog category={category} returnTo={returnTo} /></TableCell>
+                        <TableCell className="text-right"><CategoryEditDialog category={category} quotations={quotations.filter((item) => item.category_id === category.id).map((item) => ({ id: item.id, title: item.title, value: item.total_value, status: item.status, projectName: item.projects?.[0]?.name || "Projeto" }))} budgets={budgets.filter((item) => item.category_id === category.id).map((item) => ({ id: item.id, title: item.title, value: item.budget_value, status: item.status, projectName: item.projects?.[0]?.name || "Projeto" }))} expenses={expenses.filter((item) => item.category_id === category.id).map((item) => ({ id: item.id, title: item.description, value: item.approved_value, status: item.status, projectName: item.projects?.[0]?.name || "Projeto" }))} incomes={incomes.filter((item) => item.category_id === category.id).map((item) => ({ id: item.id, title: item.origin, value: item.amount, status: item.status, projectName: item.projects?.[0]?.name || "Projeto" }))} returnTo={returnTo} /></TableCell>
                       </TableRow>
                     ))}
                   </TableBody>

@@ -175,6 +175,9 @@ function databaseMessage(error: { message?: string } | null) {
     "Somente orçamentos pendentes podem ser editados",
     "O título é obrigatório e aceita no máximo 160 caracteres",
     "Informe um valor de orçamento maior que zero",
+    "Sem permissão para gerenciar usuários deste projeto",
+    "Somente o Administrador geral pode incluir novos usuários no projeto",
+    "Usuário ou projeto inválido para esta igreja",
   ];
   if (safeDatabaseMessages.some((message) => error.message?.includes(message))) return error.message;
   return "Não foi possível salvar o registro. Verifique os dados e tente novamente.";
@@ -843,7 +846,6 @@ export async function manageUserProfile(formData: FormData) {
 export async function manageProjectMembership(formData: FormData) {
   const returnTo = returnPath(formData, "/selecionar-projeto");
   try {
-    const profile = await currentProfile(["admin"]);
     const projectId = readText(formData, "projeto_id", true);
     const userId = readText(formData, "usuario_id", true);
     const role = readText(formData, "funcao_projeto", true);
@@ -854,14 +856,14 @@ export async function manageProjectMembership(formData: FormData) {
     if (!status || !["ativo", "inativo"].includes(status)) {
       throw new Error("Selecione um status válido.");
     }
+    await currentProjectProfile(["admin"], projectId!);
     const supabase = await createClient();
-    const { error } = await supabase.from("project_memberships").upsert({
-      project_id: projectId,
-      user_id: userId,
-      role,
-      status,
-      updated_by: profile.id,
-    }, { onConflict: "project_id,user_id" });
+    const { error } = await supabase.rpc("manage_project_membership", {
+      target_project_id: projectId,
+      target_user_id: userId,
+      target_role: role,
+      target_status: status,
+    });
     const message = databaseMessage(error);
     if (message) throw new Error(message);
     revalidateProjectContext(returnTo);

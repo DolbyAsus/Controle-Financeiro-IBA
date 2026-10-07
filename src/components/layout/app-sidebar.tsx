@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { FolderKanban, Menu, ShieldCheck } from "lucide-react";
+import { FolderKanban, Menu, ShieldCheck, Users } from "lucide-react";
 
 import { BrandSpectrum, IbaMark } from "@/components/brand/iba-logo";
 import { Button } from "@/components/ui/button";
@@ -21,7 +21,10 @@ function NavigationLinks({ role, projectId, isGlobalAdmin = false }: { role?: Us
         <Icon className="size-4" aria-hidden="true" />{label}
       </Link>
     ))}
-    {isGlobalAdmin ? <Link href="/admin/resumo-geral" className={cn("flex min-h-10 items-center gap-3 rounded-lg px-3 text-sm font-medium transition-colors", pathname === "/admin/resumo-geral" ? "bg-primary text-primary-foreground shadow-sm" : "text-muted-foreground hover:bg-muted hover:text-foreground")}><ShieldCheck className="size-4" aria-hidden="true" />Resumo geral</Link> : null}
+    {isGlobalAdmin ? <>
+      <Link href="/usuarios" className={cn("flex min-h-10 items-center gap-3 rounded-lg px-3 text-sm font-medium transition-colors", pathname === "/usuarios" ? "bg-primary text-primary-foreground shadow-sm" : "text-muted-foreground hover:bg-muted hover:text-foreground")}><Users className="size-4" aria-hidden="true" />Usuários globais</Link>
+      <Link href="/admin/resumo-geral" className={cn("flex min-h-10 items-center gap-3 rounded-lg px-3 text-sm font-medium transition-colors", pathname === "/admin/resumo-geral" ? "bg-primary text-primary-foreground shadow-sm" : "text-muted-foreground hover:bg-muted hover:text-foreground")}><ShieldCheck className="size-4" aria-hidden="true" />Resumo geral</Link>
+    </> : null}
   </nav>;
 }
 

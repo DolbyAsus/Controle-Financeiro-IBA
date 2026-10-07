@@ -27,6 +27,7 @@ export const primaryNavigation: NavigationItem[] = [
 
 export const projectNavigation: NavigationItem[] = [
   { href: "/dashboard", label: "Dashboard", icon: BarChart3 },
+  { href: "/usuarios", label: "Equipe do projeto", icon: Users, roles: ["admin"] },
   { href: "/etapas", label: "Etapas", icon: ClipboardList, roles: ["admin", "financeiro"] },
   { href: "/categorias", label: "Categorias", icon: Tags, roles: ["admin", "financeiro"] },
   { href: "/fornecedores", label: "Fornecedores", icon: Building2, roles: ["admin", "financeiro"] },

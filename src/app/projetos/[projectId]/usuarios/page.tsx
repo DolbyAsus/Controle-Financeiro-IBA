@@ -33,15 +33,12 @@ export default async function ProjectUsersPage({
 
   const isGlobalAdmin = access.profile.role === "admin";
   const supabase = isSupabaseConfigured() ? await createClient() : null;
-  const [usersResult, membershipsResult] = supabase
-    ? await Promise.all([
-        supabase.from("users_profile").select("id, name, email, status").order("name"),
-        supabase
-          .from("project_memberships")
-          .select("user_id, role, status")
-          .eq("project_id", projectId),
-      ])
-    : [{ data: [] }, { data: [] }];
+  const membershipsResult = supabase
+    ? await supabase
+        .from("project_memberships")
+        .select("user_id, role, status")
+        .eq("project_id", projectId)
+    : { data: [] };
 
   const memberships = new Map(
     (membershipsResult.data ?? []).map((membership) => [
@@ -49,6 +46,14 @@ export default async function ProjectUsersPage({
       membership as ProjectUserAccess & { user_id: string },
     ]),
   );
+  const membershipUserIds = (membershipsResult.data ?? []).map((membership) => membership.user_id);
+  const usersResult = supabase
+    ? isGlobalAdmin
+      ? await supabase.from("users_profile").select("id, name, email, status").order("name")
+      : membershipUserIds.length > 0
+        ? await supabase.from("users_profile").select("id, name, email, status").in("id", membershipUserIds).order("name")
+        : { data: [] }
+    : { data: [] };
   const users = usersResult.data ?? [];
   const userPage = paginate(users, query.pagina);
   const visibleMembers = memberships.size;

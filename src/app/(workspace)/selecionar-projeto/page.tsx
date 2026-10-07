@@ -5,6 +5,7 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
+import { Pagination, paginate } from "@/components/modules/pagination";
 import { createProject } from "@/lib/actions/base-registers";
 import { getAccessibleProjects, getWorkspaceProfile } from "@/lib/project-access";
 
@@ -83,11 +84,17 @@ function CreateProjectPanel() {
   );
 }
 
-export default async function SelectProjectPage() {
+export default async function SelectProjectPage({
+  searchParams,
+}: {
+  searchParams: Promise<{ pagina?: string }>;
+}) {
+  const query = await searchParams;
   const [profile, projects] = await Promise.all([
     getWorkspaceProfile(),
     getAccessibleProjects(),
   ]);
+  const projectPage = paginate(projects, query.pagina);
 
   return (
     <div className="space-y-6">
@@ -124,8 +131,9 @@ export default async function SelectProjectPage() {
           </CardContent>
         </Card>
       ) : (
-        <section className="grid gap-4 md:grid-cols-2 xl:grid-cols-3" aria-label="Projetos disponíveis">
-          {projects.map((project) => (
+        <section className="space-y-4" aria-label="Projetos disponíveis">
+          <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-3">
+          {projectPage.items.map((project) => (
             <Card key={project.id} className="flex min-h-52 flex-col">
               <CardHeader>
                 <CardDescription className="flex items-center justify-between gap-3">
@@ -142,6 +150,8 @@ export default async function SelectProjectPage() {
               </CardContent>
             </Card>
           ))}
+          </div>
+          <Pagination page={projectPage.page} totalPages={projectPage.totalPages} label="projetos disponíveis" />
         </section>
       )}
     </div>

@@ -4,6 +4,7 @@ import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 
 import type { UserRole } from "@/lib/navigation";
+import { isPaymentDateAllowed, paymentDateWindow } from "@/lib/payment-date";
 import { createClient } from "@/lib/supabase/server";
 
 type ProfileContext = { id: string; churchId: string; role: UserRole };
@@ -17,7 +18,7 @@ const fieldLimits: Record<string, number> = {
   contato: 120, endereco: 500, origem: 160, destinatario_livre: 160,
   justificativa: 2000, funcao: 20, status: 40, tipo_pessoa: 30, funcao_projeto: 20,
   projeto_id: 36, etapa_id: 36, categoria_id: 36, fornecedor_id: 36, fornecedor_existente_id: 36,
-  orcamento_id: 36, cotacao_id: 36, despesa_id: 36, usuario_id: 36,
+  orcamento_id: 36, cotacao_id: 36, despesa_id: 36, pagamento_id: 36, usuario_id: 36,
   categoria_principal_id: 36, ordem: 6, valor: 16, valor_total: 16,
   orcamento_planejado: 16, data_inicio: 10, data_pagamento: 10,
   data_recebimento: 10, data_prevista: 10, data_cotacao: 10, validade_proposta: 10,
@@ -147,6 +148,10 @@ function databaseMessage(error: { message?: string } | null) {
     "Despesa não encontrada",
     "Não é possível registrar pagamento para esta despesa",
     "O pagamento não pode ser maior que o saldo da despesa",
+    "A data do pagamento deve estar entre",
+    "Pagamento não encontrado",
+    "Somente Administrador do projeto ou Administrador global pode excluir pagamento",
+    "Não é possível editar pagamento de despesa cancelada",
     "Projeto não encontrado",
     "A descrição da despesa é obrigatória",
     "Informe um valor de despesa maior que zero",
@@ -363,6 +368,82 @@ export async function createQuotation(formData: FormData) {
   redirect(`${returnTo}?mensagem=Cotação+cadastrada+com+sucesso.`);
 }
 
+export async function updateQuotation(formData: FormData) {
+  const returnTo = returnPath(formData, "/cotacoes");
+  try {
+    const quotationId = readText(formData, "cotacao_id", true);
+    const targetProjectId = readText(formData, "projeto_id", true);
+    const supabase = await createClient();
+    const { data: quotation, error: quotationError } = await supabase
+      .from("quotations")
+      .select("project_id, status")
+      .eq("id", quotationId!)
+      .maybeSingle();
+    if (quotationError || !quotation) throw new Error("Cotação não encontrada.");
+    if (quotation.status !== "em_analise") {
+      throw new Error("Apenas cotações em análise podem ser editadas.");
+    }
+    const profile = await currentProjectProfile(
+      ["admin", "financeiro", "aprovador"],
+      quotation.project_id,
+    );
+    if (targetProjectId !== quotation.project_id) {
+      await currentProjectProfile(["admin", "financeiro", "aprovador"], targetProjectId!);
+    }
+    const totalValue = readNonNegativeNumber(formData, "valor_total");
+    if (!totalValue) throw new Error("Informe um valor total maior que zero.");
+    const quotationDate = readDate(formData, "data_cotacao");
+    const validUntil = readDate(formData, "validade_proposta");
+    if (quotationDate && validUntil && validUntil < quotationDate) {
+      throw new Error("A validade da proposta deve ser posterior à data da cotação.");
+    }
+    const supplierId = readText(formData, "fornecedor_id");
+    if (supplierId) {
+      const { data: supplierLink } = await supabase
+        .from("project_suppliers")
+        .select("supplier_id")
+        .eq("project_id", targetProjectId!)
+        .eq("supplier_id", supplierId)
+        .eq("status", "ativo")
+        .maybeSingle();
+      if (!supplierLink) throw new Error("Fornecedor inválido ou inativo para este projeto.");
+    }
+    const { error } = await supabase
+      .from("quotations")
+      .update({
+        project_id: targetProjectId,
+        stage_id: readText(formData, "etapa_id", true),
+        category_id: readText(formData, "categoria_id", true),
+        title: readText(formData, "titulo", true),
+        description: readText(formData, "descricao"),
+        proponent_name: readText(formData, "proponente", true),
+        supplier_id: supplierId,
+        proponent_phone: readText(formData, "telefone"),
+        proponent_email: readText(formData, "email"),
+        total_value: totalValue,
+        execution_deadline: readText(formData, "prazo_execucao"),
+        quotation_date: quotationDate,
+        proposal_valid_until: validUntil,
+        payment_method: readText(formData, "forma_pagamento"),
+        payment_terms: readText(formData, "condicoes_pagamento"),
+        included_scope: readText(formData, "escopo_incluso"),
+        excluded_scope: readText(formData, "escopo_excluso"),
+        warranty: readText(formData, "garantia"),
+        notes: readText(formData, "observacoes"),
+        drive_document_url: readGoogleDriveUrl(formData, "link_drive"),
+        updated_by: profile.id,
+      })
+      .eq("id", quotationId!);
+    const message = databaseMessage(error);
+    if (message) throw new Error(message);
+    revalidatePath("/cotacoes");
+    revalidatePath("/comparar-cotacoes");
+    revalidatePath("/historico");
+    revalidateProjectContext(returnTo);
+  } catch (error) { fail(returnTo, error); }
+  redirect(`${returnTo}?mensagem=Cotação+atualizada+com+sucesso.`);
+}
+
 export async function approveQuotation(formData: FormData) {
   const returnTo = returnPath(formData, "/comparar-cotacoes");
   try {
@@ -500,6 +581,10 @@ export async function registerPayment(formData: FormData) {
     if (!amount) throw new Error("Informe um valor de pagamento maior que zero.");
     const paymentDate = readDate(formData, "data_pagamento");
     if (!paymentDate) throw new Error("Informe a data do pagamento.");
+    if (!isPaymentDateAllowed(paymentDate)) {
+      const { minimum, maximum } = paymentDateWindow();
+      throw new Error(`A data do pagamento deve estar entre ${minimum.split("-").reverse().join("/")} e ${maximum.split("-").reverse().join("/")}.`);
+    }
     const supabase = await createClient();
     const { error } = await supabase.rpc("register_payment", {
       target_expense_id: readText(formData, "despesa_id", true), target_amount: amount, target_payment_date: paymentDate,
@@ -515,6 +600,71 @@ export async function registerPayment(formData: FormData) {
     revalidateProjectContext(returnTo);
   } catch (error) { fail(returnTo, error); }
   redirect(`${returnTo}?mensagem=Pagamento+registrado+com+sucesso.`);
+}
+
+export async function updatePayment(formData: FormData) {
+  const returnTo = returnPath(formData, "/pagamentos");
+  try {
+    const paymentId = readText(formData, "pagamento_id", true);
+    const amount = readNonNegativeNumber(formData, "valor");
+    if (!amount) throw new Error("Informe um valor de pagamento maior que zero.");
+    const paymentDate = readDate(formData, "data_pagamento");
+    if (!paymentDate) throw new Error("Informe a data do pagamento.");
+    if (!isPaymentDateAllowed(paymentDate)) {
+      const { minimum, maximum } = paymentDateWindow();
+      throw new Error(`A data do pagamento deve estar entre ${minimum.split("-").reverse().join("/")} e ${maximum.split("-").reverse().join("/")}.`);
+    }
+    const supabase = await createClient();
+    const { data: payment, error: paymentError } = await supabase
+      .from("payments")
+      .select("project_id")
+      .eq("id", paymentId!)
+      .maybeSingle();
+    if (paymentError || !payment) throw new Error("Pagamento não encontrado.");
+    await currentProjectProfile(["admin", "financeiro"], payment.project_id);
+    const { error } = await supabase.rpc("update_payment", {
+      target_payment_id: paymentId,
+      target_amount: amount,
+      target_payment_date: paymentDate,
+      target_payment_method: readText(formData, "forma_pagamento"),
+      receipt_url: readGoogleDriveUrl(formData, "link_comprovante"),
+      payment_notes: readText(formData, "observacoes"),
+    });
+    const message = databaseMessage(error);
+    if (message) throw new Error(message);
+    revalidatePath("/despesas");
+    revalidatePath("/pagamentos");
+    revalidatePath("/dashboard");
+    revalidatePath("/relatorio-mensal");
+    revalidatePath("/historico");
+    revalidateProjectContext(returnTo);
+  } catch (error) { fail(returnTo, error); }
+  redirect(`${returnTo}?mensagem=Pagamento+atualizado+com+sucesso.`);
+}
+
+export async function deletePayment(formData: FormData) {
+  const returnTo = returnPath(formData, "/pagamentos");
+  try {
+    const paymentId = readText(formData, "pagamento_id", true);
+    const supabase = await createClient();
+    const { data: payment, error: paymentError } = await supabase
+      .from("payments")
+      .select("project_id")
+      .eq("id", paymentId!)
+      .maybeSingle();
+    if (paymentError || !payment) throw new Error("Pagamento não encontrado.");
+    await currentProjectProfile(["admin"], payment.project_id);
+    const { error } = await supabase.rpc("delete_payment", { target_payment_id: paymentId });
+    const message = databaseMessage(error);
+    if (message) throw new Error(message);
+    revalidatePath("/despesas");
+    revalidatePath("/pagamentos");
+    revalidatePath("/dashboard");
+    revalidatePath("/relatorio-mensal");
+    revalidatePath("/historico");
+    revalidateProjectContext(returnTo);
+  } catch (error) { fail(returnTo, error); }
+  redirect(`${returnTo}?mensagem=Pagamento+excluído+e+despesa+recalculada+com+sucesso.`);
 }
 
 export async function createIncomeEntry(formData: FormData) {

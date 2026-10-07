@@ -10,6 +10,7 @@ import {
   CardHeader,
   CardTitle,
 } from "@/components/ui/card";
+import { Pagination, paginate } from "@/components/modules/pagination";
 import { isSupabaseConfigured } from "@/lib/supabase/config";
 import { createClient } from "@/lib/supabase/server";
 
@@ -38,7 +39,7 @@ export default async function MonthlyReportPage({
   searchParams,
   lockedProjectId,
 }: {
-  searchParams: Promise<{ mes?: string; projeto?: string }>;
+  searchParams: Promise<{ mes?: string; projeto?: string; pagina_entradas?: string; pagina_despesas?: string; pagina_pagamentos?: string; pagina_orcamentos?: string }>;
   lockedProjectId?: string;
 }) {
   const query = await searchParams;
@@ -110,6 +111,10 @@ export default async function MonthlyReportPage({
   const expenseTotal = sum(expenses, "approved_value");
   const projectName = (item: { projects?: { name: string }[] | null }) =>
     item.projects?.[0]?.name || "Projeto";
+  const incomePage = paginate(incomes, query.pagina_entradas);
+  const expensePage = paginate(expenses, query.pagina_despesas);
+  const paymentPage = paginate(payments, query.pagina_pagamentos);
+  const budgetPage = paginate(budgets, query.pagina_orcamentos);
   return (
     <div className="space-y-6">
       <section className="flex flex-col gap-4 lg:flex-row lg:items-end lg:justify-between">
@@ -175,8 +180,9 @@ export default async function MonthlyReportPage({
         <List
           title={`Entradas (${incomes.length})`}
           empty="Sem entradas no período."
+          pagination={{ page: incomePage.page, totalPages: incomePage.totalPages, pageParam: "pagina_entradas", label: "entradas do relatório", params: { mes: month } }}
         >
-          {incomes.map((item, index) => (
+          {incomePage.items.map((item, index) => (
             <Item
               key={`${item.origin}-${index}`}
               title={item.origin}
@@ -188,8 +194,9 @@ export default async function MonthlyReportPage({
         <List
           title={`Despesas (${expenses.length})`}
           empty="Sem despesas previstas no período."
+          pagination={{ page: expensePage.page, totalPages: expensePage.totalPages, pageParam: "pagina_despesas", label: "despesas do relatório", params: { mes: month } }}
         >
-          {expenses.map((item, index) => (
+          {expensePage.items.map((item, index) => (
             <Item
               key={`${item.description}-${index}`}
               title={item.description}
@@ -201,8 +208,9 @@ export default async function MonthlyReportPage({
         <List
           title={`Pagamentos (${payments.length})`}
           empty="Sem pagamentos no período."
+          pagination={{ page: paymentPage.page, totalPages: paymentPage.totalPages, pageParam: "pagina_pagamentos", label: "pagamentos do relatório", params: { mes: month } }}
         >
-          {payments.map((item, index) => (
+          {paymentPage.items.map((item, index) => (
             <Item
               key={`${item.payment_date}-${index}`}
               title={item.expenses?.[0]?.description || "Despesa"}
@@ -214,8 +222,9 @@ export default async function MonthlyReportPage({
         <List
           title={`Orçamentos pendentes (${budgets.length})`}
           empty="Sem orçamentos pendentes no período."
+          pagination={{ page: budgetPage.page, totalPages: budgetPage.totalPages, pageParam: "pagina_orcamentos", label: "orçamentos do relatório", params: { mes: month } }}
         >
-          {budgets.map((item, index) => (
+          {budgetPage.items.map((item, index) => (
             <Item
               key={`${item.title}-${index}`}
               title={item.title}
@@ -249,22 +258,25 @@ function List({
   title,
   empty,
   children,
+  pagination,
 }: {
   title: string;
   empty: string;
   children: React.ReactNode[];
+  pagination: React.ComponentProps<typeof Pagination>;
 }) {
   return (
     <Card>
       <CardHeader>
         <CardTitle>{title}</CardTitle>
       </CardHeader>
-      <CardContent className="max-h-[32rem] space-y-2 overflow-y-auto pr-1">
+      <CardContent className="space-y-2">
         {children.length === 0 ? (
           <p className="text-sm text-muted-foreground">{empty}</p>
         ) : (
           children
         )}
+        {children.length > 0 ? <Pagination {...pagination} /> : null}
       </CardContent>
     </Card>
   );

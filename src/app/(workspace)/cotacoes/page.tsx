@@ -1,6 +1,7 @@
 import { ReceiptText } from "lucide-react";
 
 import { createQuotation } from "@/lib/actions/base-registers";
+import { QuotationEditDialog } from "@/components/quotations/quotation-edit-dialog";
 import { RegisterPageShell } from "@/components/modules/register-page-shell";
 import { Pagination, paginate } from "@/components/modules/pagination";
 import { Badge } from "@/components/ui/badge";
@@ -23,6 +24,7 @@ import {
 } from "@/components/ui/table";
 import { isSupabaseConfigured } from "@/lib/supabase/config";
 import { createClient } from "@/lib/supabase/server";
+import { getProjectWorkspaceAccess, getWorkspaceProfile } from "@/lib/project-access";
 
 export const dynamic = "force-dynamic";
 const money = new Intl.NumberFormat("pt-BR", {
@@ -44,6 +46,10 @@ export default async function QuotationsPage({
   const projectId = query.projeto;
   const returnTo = projectId ? `/projetos/${projectId}/cotacoes` : undefined;
   const supabase = isSupabaseConfigured() ? await createClient() : null;
+  const profile = supabase ? await getWorkspaceProfile() : null;
+  const access = projectId && supabase ? await getProjectWorkspaceAccess(projectId) : null;
+  const activeRole = access?.projectRole ?? profile?.role;
+  const canEditQuotation = ["admin", "financeiro", "aprovador"].includes(activeRole ?? "");
   const projects = supabase
     ? ((await (projectId
         ? supabase.from("projects").select("id, name").eq("id", projectId)
@@ -53,10 +59,10 @@ export default async function QuotationsPage({
   const stages = supabase
     ? ((
         await (projectId
-          ? supabase.from("project_stages").select("id, name, projects(name)").eq("project_id", projectId).eq("status", "ativo").order("sort_order")
+          ? supabase.from("project_stages").select("id, name, project_id, projects(name)").eq("project_id", projectId).eq("status", "ativo").order("sort_order")
           : supabase
           .from("project_stages")
-          .select("id, name, projects(name)")
+          .select("id, name, project_id, projects(name)")
           .eq("status", "ativo")
           .order("sort_order"))
       ).data ?? [])
@@ -64,27 +70,25 @@ export default async function QuotationsPage({
   const categories = supabase
     ? ((
         await (projectId
-          ? supabase.from("categories").select("id, name, projects(name)").eq("project_id", projectId).eq("status", "ativo").order("name")
+          ? supabase.from("categories").select("id, name, project_id, projects(name)").eq("project_id", projectId).eq("status", "ativo").order("name")
           : supabase
           .from("categories")
-          .select("id, name, projects(name)")
+          .select("id, name, project_id, projects(name)")
           .eq("status", "ativo")
           .order("name"))
       ).data ?? [])
     : [];
-  const supplierLinks = supabase && projectId
-    ? ((await supabase.from("project_suppliers").select("supplier_id").eq("project_id", projectId).eq("status", "ativo")).data ?? [])
+  const supplierLinks = supabase
+    ? ((await (projectId
+      ? supabase.from("project_suppliers").select("project_id, supplier_id").eq("project_id", projectId).eq("status", "ativo")
+      : supabase.from("project_suppliers").select("project_id, supplier_id").eq("status", "ativo"))).data ?? [])
     : [];
   const supplierIds = supplierLinks.map((item) => item.supplier_id);
   const suppliers = supabase
     ? ((
         await (projectId
           ? (supplierIds.length ? supabase.from("suppliers").select("id, name").in("id", supplierIds).eq("status", "ativo").order("name") : supabase.from("suppliers").select("id, name").eq("id", "00000000-0000-0000-0000-000000000000"))
-          : supabase
-          .from("suppliers")
-          .select("id, name")
-          .eq("status", "ativo")
-          .order("name"))
+          : (supplierIds.length ? supabase.from("suppliers").select("id, name").in("id", supplierIds).eq("status", "ativo").order("name") : supabase.from("suppliers").select("id, name").eq("id", "00000000-0000-0000-0000-000000000000")))
       ).data ?? [])
     : [];
   const quotations = supabase
@@ -93,14 +97,14 @@ export default async function QuotationsPage({
           ? supabase
               .from("quotations")
               .select(
-                "id, title, proponent_name, total_value, quotation_date, status, projects(name), project_stages(name), categories(name)",
+                "id, project_id, stage_id, category_id, supplier_id, title, description, proponent_name, proponent_phone, proponent_email, total_value, execution_deadline, quotation_date, proposal_valid_until, payment_method, payment_terms, included_scope, excluded_scope, warranty, drive_document_url, notes, status, projects(name), project_stages(name), categories(name)",
               )
               .eq("project_id", projectId)
               .order("created_at", { ascending: false })
           : supabase
           .from("quotations")
           .select(
-            "id, title, proponent_name, total_value, quotation_date, status, projects(name), project_stages(name), categories(name)",
+            "id, project_id, stage_id, category_id, supplier_id, title, description, proponent_name, proponent_phone, proponent_email, total_value, execution_deadline, quotation_date, proposal_valid_until, payment_method, payment_terms, included_scope, excluded_scope, warranty, drive_document_url, notes, status, projects(name), project_stages(name), categories(name)",
           )
           .order("created_at", { ascending: false }))
       ).data ?? [])
@@ -362,6 +366,11 @@ export default async function QuotationsPage({
                       {item.proponent_name} ·{" "}
                       {money.format(Number(item.total_value))}
                     </p>
+                    {canEditQuotation && item.status === "em_analise" ? (
+                      <div className="mt-3">
+                        <QuotationEditDialog quotation={item} projects={projects} stages={stages} categories={categories} suppliers={suppliers} projectSupplierLinks={supplierLinks} returnTo={returnTo} />
+                      </div>
+                    ) : null}
                   </article>
                 ))}
               </div>
@@ -375,6 +384,7 @@ export default async function QuotationsPage({
                       <TableHead>Proponente</TableHead>
                       <TableHead>Valor</TableHead>
                       <TableHead>Status</TableHead>
+                      {canEditQuotation ? <TableHead>Ações</TableHead> : null}
                     </TableRow>
                   </TableHeader>
                   <TableBody>
@@ -396,6 +406,15 @@ export default async function QuotationsPage({
                             {statusLabel[item.status]}
                           </Badge>
                         </TableCell>
+                        {canEditQuotation ? (
+                          <TableCell>
+                            {item.status === "em_analise" ? (
+                              <QuotationEditDialog quotation={item} projects={projects} stages={stages} categories={categories} suppliers={suppliers} projectSupplierLinks={supplierLinks} returnTo={returnTo} />
+                            ) : (
+                              <span className="text-xs text-muted-foreground">Encerrada</span>
+                            )}
+                          </TableCell>
+                        ) : null}
                       </TableRow>
                     ))}
                   </TableBody>

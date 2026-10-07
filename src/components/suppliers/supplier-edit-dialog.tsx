@@ -1,5 +1,6 @@
 "use client";
 
+import { useState } from "react";
 import { Building2, Pencil, ReceiptText, WalletCards, Landmark } from "lucide-react";
 
 import { updateSupplier } from "@/lib/actions/base-registers";
@@ -70,6 +71,12 @@ function LinkedDocumentList({
   items: LinkedDocument[];
   emptyMessage: string;
 }) {
+  const [page, setPage] = useState(1);
+  const pageSize = 5;
+  const totalPages = Math.max(1, Math.ceil(items.length / pageSize));
+  const safePage = Math.min(page, totalPages);
+  const pageItems = items.slice((safePage - 1) * pageSize, safePage * pageSize);
+
   return (
     <section className="rounded-lg border" aria-label={title}>
       <div className="flex items-center justify-between gap-3 border-b px-3 py-2">
@@ -82,8 +89,8 @@ function LinkedDocumentList({
       {items.length === 0 ? (
         <p className="px-3 py-3 text-sm text-muted-foreground">{emptyMessage}</p>
       ) : (
-        <ul className="max-h-48 divide-y overflow-y-auto">
-          {items.map((item) => (
+        <ul className="divide-y">
+          {pageItems.map((item) => (
             <li key={item.id} className="space-y-1 px-3 py-2 text-sm">
               <div className="flex items-start justify-between gap-2">
                 <span className="min-w-0 break-words font-medium">{item.title}</span>
@@ -96,6 +103,15 @@ function LinkedDocumentList({
           ))}
         </ul>
       )}
+      {totalPages > 1 ? (
+        <div className="flex items-center justify-between gap-2 border-t px-3 py-2 text-xs">
+          <span className="text-muted-foreground">Página {safePage} de {totalPages}</span>
+          <div className="flex gap-2">
+            <Button type="button" size="xs" variant="outline" disabled={safePage === 1} onClick={() => setPage((current) => Math.max(1, current - 1))}>Anterior</Button>
+            <Button type="button" size="xs" variant="outline" disabled={safePage === totalPages} onClick={() => setPage((current) => Math.min(totalPages, current + 1))}>Próxima</Button>
+          </div>
+        </div>
+      ) : null}
     </section>
   );
 }

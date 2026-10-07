@@ -1,6 +1,7 @@
 import { BanknoteArrowDown } from "lucide-react";
 
 import { registerPayment } from "@/lib/actions/base-registers";
+import { PaymentEditDialog } from "@/components/payments/payment-edit-dialog";
 import { RegisterPageShell } from "@/components/modules/register-page-shell";
 import { Pagination, paginate } from "@/components/modules/pagination";
 import { Badge } from "@/components/ui/badge";
@@ -23,6 +24,8 @@ import {
 } from "@/components/ui/table";
 import { isSupabaseConfigured } from "@/lib/supabase/config";
 import { createClient } from "@/lib/supabase/server";
+import { getProjectWorkspaceAccess, getWorkspaceProfile } from "@/lib/project-access";
+import { paymentDateWindow } from "@/lib/payment-date";
 
 export const dynamic = "force-dynamic";
 
@@ -68,6 +71,12 @@ export default async function PaymentsPage({
   const projectId = query.projeto;
   const returnTo = projectId ? `/projetos/${projectId}/pagamentos` : undefined;
   const supabase = isSupabaseConfigured() ? await createClient() : null;
+  const profile = supabase ? await getWorkspaceProfile() : null;
+  const access = projectId && supabase ? await getProjectWorkspaceAccess(projectId) : null;
+  const activeRole = access?.projectRole ?? profile?.role;
+  const canEditPayments = ["admin", "financeiro"].includes(activeRole ?? "");
+  const canDeletePayments = activeRole === "admin";
+  const paymentWindow = paymentDateWindow();
   const expenses = supabase
     ? ((
         await (projectId
@@ -94,14 +103,14 @@ export default async function PaymentsPage({
           ? supabase
               .from("payments")
               .select(
-                "id, amount, payment_date, payment_method, expenses(description, free_recipient, suppliers(name)), projects(name)",
+                "id, amount, payment_date, payment_method, drive_receipt_url, notes, expenses(description, free_recipient, suppliers(name)), projects(name)",
               )
               .eq("project_id", projectId)
               .order("payment_date", { ascending: false })
           : supabase
           .from("payments")
           .select(
-            "id, amount, payment_date, payment_method, expenses(description, free_recipient, suppliers(name)), projects(name)",
+            "id, amount, payment_date, payment_method, drive_receipt_url, notes, expenses(description, free_recipient, suppliers(name)), projects(name)",
           )
           .order("payment_date", { ascending: false }))
       ).data ?? [])
@@ -190,8 +199,13 @@ export default async function PaymentsPage({
               className="h-9 rounded-lg border border-input bg-transparent px-3 text-sm"
               name="data_pagamento"
               required
+              min={paymentWindow.minimum}
+              max={paymentWindow.maximum}
               type="date"
             />
+            <span className="text-xs font-normal text-muted-foreground">
+              Permitido de {paymentWindow.minimum.split("-").reverse().join("/")} até {paymentWindow.maximum.split("-").reverse().join("/")}.
+            </span>
           </label>
           <label className="grid gap-1.5 text-sm font-medium">
             Forma de pagamento
@@ -340,6 +354,19 @@ export default async function PaymentsPage({
                           new Date(`${item.payment_date}T00:00:00Z`),
                         )}
                       </p>
+                      {canEditPayments ? (
+                        <div className="mt-3">
+                          <PaymentEditDialog
+                            payment={item}
+                            expenseDescription={expense?.description || "Despesa"}
+                            recipient={relatedName(expense?.suppliers) || expense?.free_recipient || "—"}
+                            minimumDate={paymentWindow.minimum}
+                            maximumDate={paymentWindow.maximum}
+                            canDelete={canDeletePayments}
+                            returnTo={returnTo}
+                          />
+                        </div>
+                      ) : null}
                     </article>
                   );
                 })}
@@ -354,6 +381,7 @@ export default async function PaymentsPage({
                       <TableHead>Data</TableHead>
                       <TableHead>Forma</TableHead>
                       <TableHead>Valor</TableHead>
+                      {canEditPayments ? <TableHead>Ações</TableHead> : null}
                     </TableRow>
                   </TableHeader>
                   <TableBody>
@@ -385,6 +413,19 @@ export default async function PaymentsPage({
                           <TableCell>
                             {money.format(Number(item.amount))}
                           </TableCell>
+                          {canEditPayments ? (
+                            <TableCell>
+                              <PaymentEditDialog
+                                payment={item}
+                                expenseDescription={expense?.description || "Despesa"}
+                                recipient={relatedName(expense?.suppliers) || expense?.free_recipient || "—"}
+                                minimumDate={paymentWindow.minimum}
+                                maximumDate={paymentWindow.maximum}
+                                canDelete={canDeletePayments}
+                                returnTo={returnTo}
+                              />
+                            </TableCell>
+                          ) : null}
                         </TableRow>
                       );
                     })}

@@ -33,15 +33,15 @@ export function Brand({ projectId }: { projectId?: string }) {
 }
 
 export function DesktopSidebar({ role, projectId, isGlobalAdmin = false }: { role?: UserRole; projectId?: string; isGlobalAdmin?: boolean }) {
-  return <aside className="hidden min-h-screen w-68 shrink-0 border-r bg-sidebar lg:block"><BrandSpectrum className="h-1" /><Brand projectId={projectId} /><NavigationLinks role={role} projectId={projectId} isGlobalAdmin={isGlobalAdmin} /></aside>;
+  return <aside className="sticky top-0 hidden h-dvh w-68 shrink-0 flex-col overflow-hidden border-r bg-sidebar lg:flex"><BrandSpectrum className="h-1 shrink-0" /><Brand projectId={projectId} /><div className="min-h-0 flex-1 overflow-y-auto overscroll-contain py-1"><NavigationLinks role={role} projectId={projectId} isGlobalAdmin={isGlobalAdmin} /></div></aside>;
 }
 
 export function MobileSidebar({ role, projectId, isGlobalAdmin = false }: { role?: UserRole; projectId?: string; isGlobalAdmin?: boolean }) {
   return <Sheet>
     <SheetTrigger render={<Button variant="ghost" size="icon" aria-label="Abrir menu" />}><Menu className="size-5" aria-hidden="true" /></SheetTrigger>
-    <SheetContent side="left" className="w-[min(20rem,85vw)] p-0">
+    <SheetContent side="left" className="h-dvh max-h-dvh w-[min(20rem,85vw)] overflow-hidden p-0">
       <SheetHeader className="sr-only"><SheetTitle>Menu principal</SheetTitle><SheetDescription>Navegação do sistema financeiro.</SheetDescription></SheetHeader>
-      <BrandSpectrum className="h-1" /><Brand projectId={projectId} /><NavigationLinks role={role} projectId={projectId} isGlobalAdmin={isGlobalAdmin} />
+      <BrandSpectrum className="h-1 shrink-0" /><Brand projectId={projectId} /><div className="min-h-0 flex-1 overflow-y-auto overscroll-contain py-1 touch-pan-y"><NavigationLinks role={role} projectId={projectId} isGlobalAdmin={isGlobalAdmin} /></div>
     </SheetContent>
   </Sheet>;
 }

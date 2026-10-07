@@ -19,16 +19,6 @@ const money = new Intl.NumberFormat("pt-BR", {
   style: "currency",
   currency: "BRL",
 });
-const monthLabel = new Intl.DateTimeFormat("pt-BR", {
-  month: "long",
-  year: "numeric",
-  timeZone: "America/Sao_Paulo",
-});
-const monthFormatter = new Intl.DateTimeFormat("en-CA", {
-  timeZone: "America/Sao_Paulo",
-  year: "numeric",
-  month: "2-digit",
-});
 const dateFormatter = new Intl.DateTimeFormat("en-CA", {
   timeZone: "America/Sao_Paulo",
   year: "numeric",
@@ -37,7 +27,6 @@ const dateFormatter = new Intl.DateTimeFormat("en-CA", {
 });
 
 type ReportQuery = {
-  mes?: string;
   inicio?: string;
   fim?: string;
   pagina_entradas?: string;
@@ -46,26 +35,11 @@ type ReportQuery = {
   pagina_orcamentos?: string;
 };
 
-function validMonth(value?: string) {
-  return /^\d{4}-(0[1-9]|1[0-2])$/.test(value ?? "")
-    ? value!
-    : monthFormatter.format(new Date());
-}
-
 function isIsoDate(value?: string) {
   if (!/^\d{4}-\d{2}-\d{2}$/.test(value ?? "")) return false;
   const [year, month, day] = value!.split("-").map(Number);
   const date = new Date(Date.UTC(year, month - 1, day));
   return date.getUTCFullYear() === year && date.getUTCMonth() === month - 1 && date.getUTCDate() === day;
-}
-
-function monthRange(month: string) {
-  const [year, numericMonth] = month.split("-").map(Number);
-  const lastDay = new Date(Date.UTC(year, numericMonth, 0)).getUTCDate();
-  return {
-    start: `${month}-01`,
-    end: `${month}-${String(lastDay).padStart(2, "0")}`,
-  };
 }
 
 function addOneYear(dateValue: string) {
@@ -75,15 +49,8 @@ function addOneYear(dateValue: string) {
 }
 
 function reportRange(query: ReportQuery) {
-  const currentMonth = validMonth();
-  const fallback = monthRange(currentMonth);
   const today = dateFormatter.format(new Date());
-
-  if (query.mes) {
-    const month = validMonth(query.mes);
-    return { ...monthRange(month), month, today, warning: undefined };
-  }
-
+  const fallback = { start: `${today.slice(0, 7)}-01`, end: today };
   const start = isIsoDate(query.inicio) ? query.inicio! : fallback.start;
   const end = isIsoDate(query.fim) ? query.fim! : fallback.end;
   const isValid = start <= end && end <= today && end <= addOneYear(start);
@@ -91,11 +58,10 @@ function reportRange(query: ReportQuery) {
   return {
     start: isValid ? start : fallback.start,
     end: isValid ? end : fallback.end,
-    month: undefined,
     today,
     warning: isValid
       ? undefined
-      : "Informe datas válidas, sem data futura e com intervalo máximo de um ano. O mês atual foi aplicado.",
+      : "Informe datas válidas, sem data futura e com intervalo máximo de um ano. O período atual foi aplicado.",
   };
 }
 
@@ -198,17 +164,8 @@ export default async function MonthlyReportPage({
         </div>
         <form
           aria-label="Filtros do relatório"
-          className="grid gap-2 sm:grid-cols-2 lg:grid-cols-[10rem_10rem_10rem_auto]"
+          className="grid gap-2 sm:grid-cols-2 lg:grid-cols-[10rem_10rem_auto]"
         >
-          <label className="grid gap-1 text-sm font-medium">
-            Mês completo
-            <input
-              className="h-9 rounded-lg border border-input bg-background px-3"
-              name="mes"
-              type="month"
-              defaultValue={range.month}
-            />
-          </label>
           <label className="grid gap-1 text-sm font-medium">
             Data inicial
             <input
@@ -232,8 +189,8 @@ export default async function MonthlyReportPage({
           <Button className="self-end" type="submit">
             Atualizar
           </Button>
-          <p className="sm:col-span-2 lg:col-span-4 text-xs text-muted-foreground">
-            Escolha um mês completo ou informe um intervalo. Quando o mês for preenchido, ele tem prioridade. O intervalo máximo é de um ano.
+          <p className="sm:col-span-2 lg:col-span-3 text-xs text-muted-foreground">
+            Informe um período de até um ano, sem datas futuras.
           </p>
         </form>
       </section>
@@ -246,9 +203,7 @@ export default async function MonthlyReportPage({
         <CardHeader>
           <CardTitle className="flex items-center gap-2">
             <FileBarChart className="size-5 text-primary" />
-            {range.month
-              ? monthLabel.format(new Date(`${range.month}-01T12:00:00`))
-              : `${range.start.split("-").reverse().join("/")} a ${range.end.split("-").reverse().join("/")}`}
+            {`${range.start.split("-").reverse().join("/")} a ${range.end.split("-").reverse().join("/")}`}
           </CardTitle>
           <CardDescription>
             Resumo dos lançamentos do projeto e período selecionados.
@@ -270,14 +225,14 @@ export default async function MonthlyReportPage({
             value={paymentTotal}
             tone="text-rose-700"
           />
-          <Metric label="Resultado do mês" value={incomeTotal - paymentTotal} />
+          <Metric label="Resultado do período" value={incomeTotal - paymentTotal} />
         </CardContent>
       </Card>
       <section className="grid gap-4 xl:grid-cols-2">
         <List
           title={`Entradas (${incomes.length})`}
           empty="Sem entradas no período."
-          pagination={{ page: incomePage.page, totalPages: incomePage.totalPages, pageParam: "pagina_entradas", label: "entradas do relatório", params: { mes: range.month, inicio: range.month ? undefined : range.start, fim: range.month ? undefined : range.end } }}
+          pagination={{ page: incomePage.page, totalPages: incomePage.totalPages, pageParam: "pagina_entradas", label: "entradas do relatório", params: { inicio: range.start, fim: range.end } }}
         >
           {incomePage.items.map((item, index) => (
             <Item
@@ -291,7 +246,7 @@ export default async function MonthlyReportPage({
         <List
           title={`Despesas (${expenses.length})`}
           empty="Sem despesas previstas no período."
-          pagination={{ page: expensePage.page, totalPages: expensePage.totalPages, pageParam: "pagina_despesas", label: "despesas do relatório", params: { mes: range.month, inicio: range.month ? undefined : range.start, fim: range.month ? undefined : range.end } }}
+          pagination={{ page: expensePage.page, totalPages: expensePage.totalPages, pageParam: "pagina_despesas", label: "despesas do relatório", params: { inicio: range.start, fim: range.end } }}
         >
           {expensePage.items.map((item, index) => (
             <Item
@@ -305,7 +260,7 @@ export default async function MonthlyReportPage({
         <List
           title={`Pagamentos (${payments.length})`}
           empty="Sem pagamentos no período."
-          pagination={{ page: paymentPage.page, totalPages: paymentPage.totalPages, pageParam: "pagina_pagamentos", label: "pagamentos do relatório", params: { mes: range.month, inicio: range.month ? undefined : range.start, fim: range.month ? undefined : range.end } }}
+          pagination={{ page: paymentPage.page, totalPages: paymentPage.totalPages, pageParam: "pagina_pagamentos", label: "pagamentos do relatório", params: { inicio: range.start, fim: range.end } }}
         >
           {paymentPage.items.map((item, index) => (
             <Item
@@ -319,7 +274,7 @@ export default async function MonthlyReportPage({
         <List
           title={`Orçamentos pendentes (${budgets.length})`}
           empty="Sem orçamentos pendentes no período."
-          pagination={{ page: budgetPage.page, totalPages: budgetPage.totalPages, pageParam: "pagina_orcamentos", label: "orçamentos do relatório", params: { mes: range.month, inicio: range.month ? undefined : range.start, fim: range.month ? undefined : range.end } }}
+          pagination={{ page: budgetPage.page, totalPages: budgetPage.totalPages, pageParam: "pagina_orcamentos", label: "orçamentos do relatório", params: { inicio: range.start, fim: range.end } }}
         >
           {budgetPage.items.map((item, index) => (
             <Item

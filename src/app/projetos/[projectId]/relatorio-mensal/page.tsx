@@ -5,7 +5,14 @@ export default async function ProjectMonthlyReportPage({
   searchParams,
 }: {
   params: Promise<{ projectId: string }>;
-  searchParams: Promise<{ mes?: string }>;
+  searchParams: Promise<{
+    inicio?: string;
+    fim?: string;
+    pagina_entradas?: string;
+    pagina_despesas?: string;
+    pagina_pagamentos?: string;
+    pagina_orcamentos?: string;
+  }>;
 }) {
   const [{ projectId }, query] = await Promise.all([params, searchParams]);
   return <MonthlyReportPage searchParams={Promise.resolve(query)} lockedProjectId={projectId} />;

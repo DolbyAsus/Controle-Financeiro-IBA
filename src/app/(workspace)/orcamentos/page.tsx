@@ -5,6 +5,7 @@ import {
   resolveBudgetRecipient,
 } from "@/lib/actions/base-registers";
 import { BudgetEditDialog } from "@/components/budgets/budget-edit-dialog";
+import { CreateRecordDialog } from "@/components/modules/create-record-dialog";
 import { RegisterPageShell } from "@/components/modules/register-page-shell";
 import { Pagination, paginate } from "@/components/modules/pagination";
 import { Badge } from "@/components/ui/badge";
@@ -17,6 +18,14 @@ import {
   CardTitle,
 } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
+import {
+  Table,
+  TableBody,
+  TableCell,
+  TableHead,
+  TableHeader,
+  TableRow,
+} from "@/components/ui/table";
 import { isSupabaseConfigured } from "@/lib/supabase/config";
 import { createClient } from "@/lib/supabase/server";
 import { getProjectWorkspaceAccess, getWorkspaceProfile } from "@/lib/project-access";
@@ -109,99 +118,33 @@ export default async function BudgetsPage({
         </p>
       }
     >
+      <Card>
+        <CardHeader>
+          <CardTitle>Orçamentos registrados</CardTitle>
+          <CardDescription>
+            {budgets.length} orçamentos disponíveis para acompanhamento.
+          </CardDescription>
+        </CardHeader>
+        <CardContent>
       {budgets.length === 0 ? (
-        <Card>
-          <CardContent className="py-10 text-sm text-muted-foreground">
+          <p className="py-10 text-sm text-muted-foreground">
             Ainda não há orçamentos gerados a partir de cotações aprovadas.
-          </CardContent>
-        </Card>
+          </p>
       ) : (
         <>
-          <div className="grid gap-4 lg:grid-cols-2">
+          <div className="grid gap-3 md:hidden">
             {budgetPage.items.map((item) => (
-              <Card key={item.id}>
-                <CardHeader>
-                  <div className="flex justify-between gap-3">
-                    <div>
-                      <CardTitle>{item.title}</CardTitle>
-                      <CardDescription>
-                        {item.projects?.[0]?.name || "Projeto"} ·{" "}
-                        {money.format(Number(item.budget_value))}
-                      </CardDescription>
-                    </div>
-                    <Badge variant="secondary">{label[item.status]}</Badge>
-                  </div>
-                </CardHeader>
-                <CardContent className="space-y-3">
-                  <p className="text-sm">
-                    <span className="font-medium">Justificativa: </span>
-                    {item.choice_justification}
-                  </p>
-                  <p className="text-sm">
-                    <span className="font-medium">Destinatário: </span>
-                    {item.suppliers?.[0]?.name ||
-                      item.free_recipient ||
-                      "Pendente"}
-                  </p>
-                  {canEditBudget && ["fornecedor_pendente", "aguardando_aprovacao_financeira"].includes(item.status) ? <BudgetEditDialog budget={item} stages={stages} categories={categories} suppliers={suppliers} projectSupplierLinks={supplierLinks} returnTo={returnTo} /> : null}
-                  {item.status === "fornecedor_pendente" ? (
-                    <form
-                      action={resolveBudgetRecipient}
-                      className="grid gap-3 border-t pt-4"
-                    >
-                      <input
-                        type="hidden"
-                        name="orcamento_id"
-                        value={item.id}
-                      />
-                      {projectId ? <input type="hidden" name="projeto_id" value={projectId} /> : null}
-                      {returnTo ? <input type="hidden" name="retorno" value={returnTo} /> : null}
-                      <label className="grid gap-1 text-sm font-medium">
-                        Fornecedor cadastrado
-                        <select
-                          className="h-9 rounded-lg border border-input bg-transparent px-3 text-sm"
-                          name="fornecedor_id"
-                          defaultValue=""
-                        >
-                          <option value="">Selecione, se houver</option>
-                          {suppliers.map((supplier) => (
-                            <option key={supplier.id} value={supplier.id}>
-                              {supplier.name}
-                            </option>
-                          ))}
-                        </select>
-                      </label>
-                      <label className="grid gap-1 text-sm font-medium">
-                        Ou destinatário livre
-                        <Input
-                          className="w-full"
-                          name="destinatario_livre"
-                          maxLength={160}
-                          placeholder="Nome de quem receberá"
-                        />
-                      </label>
-                      <Button type="submit">Definir destinatário</Button>
-                    </form>
-                  ) : null}
-                  {item.status === "aguardando_aprovacao_financeira" ? (
-                    <form
-                      action={approveBudgetAsExpense}
-                      className="border-t pt-4"
-                    >
-                      <input
-                        type="hidden"
-                        name="orcamento_id"
-                        value={item.id}
-                      />
-                      {projectId ? <input type="hidden" name="projeto_id" value={projectId} /> : null}
-                      {returnTo ? <input type="hidden" name="retorno" value={returnTo} /> : null}
-                      <Button type="submit">Aprovar como despesa</Button>
-                    </form>
-                  ) : null}
-                </CardContent>
-              </Card>
+              <article key={item.id} className="rounded-lg border p-3">
+                <div className="flex items-start justify-between gap-3">
+                  <div className="min-w-0"><strong className="break-words">{item.title}</strong><p className="mt-1 text-sm text-muted-foreground">{item.projects?.[0]?.name || "Projeto"} · {item.suppliers?.[0]?.name || item.free_recipient || "Destinatário pendente"}</p></div>
+                  <Badge className="shrink-0" variant="secondary">{label[item.status]}</Badge>
+                </div>
+                <p className="mt-2 text-sm font-medium">{money.format(Number(item.budget_value))}</p>
+                <BudgetActions item={item} />
+              </article>
             ))}
           </div>
+          <div className="hidden overflow-x-auto md:block"><Table><TableHeader><TableRow><TableHead>Orçamento</TableHead><TableHead>Projeto</TableHead><TableHead>Destinatário</TableHead><TableHead>Valor</TableHead><TableHead>Status</TableHead><TableHead className="text-right">Ações</TableHead></TableRow></TableHeader><TableBody>{budgetPage.items.map((item) => <TableRow key={item.id}><TableCell className="font-medium">{item.title}</TableCell><TableCell>{item.projects?.[0]?.name || "—"}</TableCell><TableCell>{item.suppliers?.[0]?.name || item.free_recipient || "Pendente"}</TableCell><TableCell>{money.format(Number(item.budget_value))}</TableCell><TableCell><Badge variant="secondary">{label[item.status]}</Badge></TableCell><TableCell><BudgetActions item={item} /></TableCell></TableRow>)}</TableBody></Table></div>
           <Pagination
             page={budgetPage.page}
             totalPages={budgetPage.totalPages}
@@ -209,6 +152,17 @@ export default async function BudgetsPage({
           />
         </>
       )}
+        </CardContent>
+      </Card>
     </RegisterPageShell>
   );
+
+  function BudgetActions({ item }: { item: (typeof budgets)[number] }) {
+    const editable = canEditBudget && ["fornecedor_pendente", "aguardando_aprovacao_financeira"].includes(item.status);
+    return <div className="mt-3 flex flex-wrap gap-2 md:mt-0 md:justify-end">
+      {editable ? <BudgetEditDialog budget={item} stages={stages} categories={categories} suppliers={suppliers} projectSupplierLinks={supplierLinks} returnTo={returnTo} /> : null}
+      {item.status === "fornecedor_pendente" ? <CreateRecordDialog buttonLabel="Definir destinatário" title="Definir destinatário do orçamento" description="Informe fornecedor cadastrado ou destinatário livre para liberar a aprovação financeira."><form action={resolveBudgetRecipient} className="grid gap-4"><input type="hidden" name="orcamento_id" value={item.id} />{projectId ? <input type="hidden" name="projeto_id" value={projectId} /> : null}{returnTo ? <input type="hidden" name="retorno" value={returnTo} /> : null}<label className="grid gap-1.5 text-sm font-medium">Fornecedor cadastrado<select className="h-9 rounded-lg border border-input bg-transparent px-3 text-sm" name="fornecedor_id" defaultValue=""><option value="">Selecione, se houver</option>{suppliers.map((supplier) => <option key={supplier.id} value={supplier.id}>{supplier.name}</option>)}</select></label><label className="grid gap-1.5 text-sm font-medium">Ou destinatário livre<Input className="w-full" name="destinatario_livre" maxLength={160} placeholder="Nome de quem receberá" /></label><div><Button type="submit">Salvar destinatário</Button></div></form></CreateRecordDialog> : null}
+      {item.status === "aguardando_aprovacao_financeira" ? <form action={approveBudgetAsExpense}><input type="hidden" name="orcamento_id" value={item.id} />{projectId ? <input type="hidden" name="projeto_id" value={projectId} /> : null}{returnTo ? <input type="hidden" name="retorno" value={returnTo} /> : null}<Button type="submit">Aprovar como despesa</Button></form> : null}
+    </div>;
+  }
 }

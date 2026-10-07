@@ -5,6 +5,7 @@ import { manageProjectMembership } from "@/lib/actions/base-registers";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
+import { Pagination, paginate } from "@/components/modules/pagination";
 import { getProjectWorkspaceAccess } from "@/lib/project-access";
 import { isSupabaseConfigured } from "@/lib/supabase/config";
 import { createClient } from "@/lib/supabase/server";
@@ -23,7 +24,7 @@ export default async function ProjectUsersPage({
   searchParams,
 }: {
   params: Promise<{ projectId: string }>;
-  searchParams: Promise<{ mensagem?: string; erro?: string }>;
+  searchParams: Promise<{ mensagem?: string; erro?: string; pagina?: string }>;
 }) {
   const [{ projectId }, query] = await Promise.all([params, searchParams]);
   const access = await getProjectWorkspaceAccess(projectId);
@@ -37,6 +38,8 @@ export default async function ProjectUsersPage({
       ])
     : [{ data: [] }, { data: [] }];
   const memberships = new Map((membershipsResult.data ?? []).map((membership) => [membership.user_id, membership]));
+  const users = usersResult.data ?? [];
+  const userPage = paginate(users, query.pagina);
   const returnTo = `/projetos/${projectId}/usuarios`;
 
   return <div className="space-y-6">
@@ -50,10 +53,10 @@ export default async function ProjectUsersPage({
     <Card>
       <CardHeader>
         <CardTitle className="flex items-center gap-2"><Users className="size-5 text-primary" />Usuários cadastrados</CardTitle>
-        <CardDescription>{usersResult.data?.length ?? 0} usuários disponíveis na igreja. Um vínculo inativo não permite abrir este projeto.</CardDescription>
+        <CardDescription>{users.length} usuários disponíveis na igreja. Um vínculo inativo não permite abrir este projeto.</CardDescription>
       </CardHeader>
       <CardContent className="space-y-3">
-        {(usersResult.data ?? []).map((user) => {
+        {userPage.items.map((user) => {
           const membership = memberships.get(user.id);
           return <form key={user.id} action={manageProjectMembership} className="grid gap-3 rounded-lg border p-3 lg:grid-cols-[minmax(0,1fr)_220px_140px_auto] lg:items-end">
             <input name="projeto_id" type="hidden" value={projectId} />
@@ -65,7 +68,7 @@ export default async function ProjectUsersPage({
             <Button type="submit">{membership ? "Atualizar" : "Vincular"}</Button>
           </form>;
         })}
-        {(usersResult.data ?? []).length === 0 ? <p className="py-6 text-sm text-muted-foreground">Ainda não há outro usuário cadastrado. Após criar ou convidar a pessoa no Supabase, ela aparecerá aqui para ser vinculada.</p> : null}
+        {users.length === 0 ? <p className="py-6 text-sm text-muted-foreground">Ainda não há outro usuário cadastrado. Após criar ou convidar a pessoa no Supabase, ela aparecerá aqui para ser vinculada.</p> : <Pagination page={userPage.page} totalPages={userPage.totalPages} label="usuários do projeto" />}
       </CardContent>
     </Card>
   </div>;

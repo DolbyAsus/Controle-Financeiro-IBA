@@ -10,6 +10,7 @@ import {
   CardTitle,
 } from "@/components/ui/card";
 import { getOperationalNotifications } from "@/lib/notifications";
+import { Pagination, paginate } from "@/components/modules/pagination";
 import { getProjectWorkspaceAccess } from "@/lib/project-access";
 import { isSupabaseConfigured } from "@/lib/supabase/config";
 
@@ -17,26 +18,33 @@ export const dynamic = "force-dynamic";
 
 export default async function NotificationsPage({
   lockedProjectId,
+  searchParams,
 }: {
   lockedProjectId?: string;
+  searchParams: Promise<{ pagina?: string }>;
 }) {
+  const query = await searchParams;
   if (!lockedProjectId) redirect("/selecionar-projeto");
   if (!isSupabaseConfigured())
-    return <NotificationContent notifications={[]} />;
+    return <NotificationContent notifications={[]} page={query.pagina} />;
   const access = await getProjectWorkspaceAccess(lockedProjectId);
   if (!access) redirect("/selecionar-projeto?erro=projeto-nao-disponivel");
   return (
     <NotificationContent
       notifications={await getOperationalNotifications(access.projectRole, lockedProjectId)}
+      page={query.pagina}
     />
   );
 }
 
 function NotificationContent({
   notifications,
+  page,
 }: {
   notifications: Awaited<ReturnType<typeof getOperationalNotifications>>;
+  page?: string;
 }) {
+  const notificationPage = paginate(notifications, page);
   return (
     <div className="space-y-6">
       <section>
@@ -58,8 +66,9 @@ function NotificationContent({
           </CardContent>
         </Card>
       ) : (
+        <>
         <section className="grid gap-4 lg:grid-cols-2">
-          {notifications.map((notification) => (
+          {notificationPage.items.map((notification) => (
             <Card
               key={notification.id}
               className={
@@ -91,6 +100,12 @@ function NotificationContent({
             </Card>
           ))}
         </section>
+        <Pagination
+          page={notificationPage.page}
+          totalPages={notificationPage.totalPages}
+          label="notificações"
+        />
+        </>
       )}
     </div>
   );

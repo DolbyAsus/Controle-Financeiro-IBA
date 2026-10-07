@@ -28,7 +28,11 @@ export default async function ProjectDashboardPage({
 
   const [incomesResult, paymentsResult, expensesResult, quotationsResult, budgetsResult] = await Promise.all([
     supabase.from("income_entries").select("amount, received_date").eq("project_id", project.id).eq("status", "recebida"),
-    supabase.from("payments").select("amount, payment_date").eq("project_id", project.id),
+    supabase
+      .from("payments")
+      .select("amount, payment_date, expenses!inner(status)")
+      .eq("project_id", project.id)
+      .neq("expenses.status", "cancelada"),
     supabase.from("expenses").select("approved_value, remaining_value, competence, expected_date, status").eq("project_id", project.id).neq("status", "cancelada"),
     supabase.from("quotations").select("id").eq("project_id", project.id).eq("status", "em_analise"),
     supabase.from("budgets").select("id, status").eq("project_id", project.id).in("status", ["fornecedor_pendente", "aguardando_aprovacao_financeira"]),

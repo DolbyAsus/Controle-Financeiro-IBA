@@ -4,6 +4,7 @@ import {
   approveBudgetAsExpense,
   resolveBudgetRecipient,
 } from "@/lib/actions/base-registers";
+import { BudgetEditDialog } from "@/components/budgets/budget-edit-dialog";
 import { RegisterPageShell } from "@/components/modules/register-page-shell";
 import { Pagination, paginate } from "@/components/modules/pagination";
 import { Badge } from "@/components/ui/badge";
@@ -18,6 +19,7 @@ import {
 import { Input } from "@/components/ui/input";
 import { isSupabaseConfigured } from "@/lib/supabase/config";
 import { createClient } from "@/lib/supabase/server";
+import { getProjectWorkspaceAccess, getWorkspaceProfile } from "@/lib/project-access";
 
 export const dynamic = "force-dynamic";
 const money = new Intl.NumberFormat("pt-BR", {
@@ -41,8 +43,14 @@ export default async function BudgetsPage({
   const projectId = query.projeto;
   const returnTo = projectId ? `/projetos/${projectId}/orcamentos` : undefined;
   const supabase = isSupabaseConfigured() ? await createClient() : null;
-  const supplierLinks = supabase && projectId
-    ? ((await supabase.from("project_suppliers").select("supplier_id").eq("project_id", projectId).eq("status", "ativo")).data ?? [])
+  const profile = supabase ? await getWorkspaceProfile() : null;
+  const access = projectId && supabase ? await getProjectWorkspaceAccess(projectId) : null;
+  const activeRole = access?.projectRole ?? profile?.role;
+  const canEditBudget = ["admin", "financeiro"].includes(activeRole ?? "");
+  const supplierLinks = supabase
+    ? ((await (projectId
+      ? supabase.from("project_suppliers").select("project_id, supplier_id").eq("project_id", projectId).eq("status", "ativo")
+      : supabase.from("project_suppliers").select("project_id, supplier_id").eq("status", "ativo"))).data ?? [])
     : [];
   const supplierIds = supplierLinks.map((item) => item.supplier_id);
   const suppliers = supabase
@@ -56,20 +64,30 @@ export default async function BudgetsPage({
           .order("name"))
       ).data ?? [])
     : [];
+  const stages = supabase
+    ? ((await (projectId
+      ? supabase.from("project_stages").select("id, name, project_id").eq("project_id", projectId).eq("status", "ativo").order("sort_order")
+      : supabase.from("project_stages").select("id, name, project_id").eq("status", "ativo").order("sort_order"))).data ?? [])
+    : [];
+  const categories = supabase
+    ? ((await (projectId
+      ? supabase.from("categories").select("id, name, project_id").eq("project_id", projectId).eq("status", "ativo").in("type", ["saida", "ambos"]).order("name")
+      : supabase.from("categories").select("id, name, project_id").eq("status", "ativo").in("type", ["saida", "ambos"]).order("name"))).data ?? [])
+    : [];
   const budgets = supabase
     ? ((
         await (projectId
           ? supabase
               .from("budgets")
               .select(
-                "id, title, budget_value, status, free_recipient, choice_justification, projects(name), suppliers(name)",
+                "id, project_id, stage_id, category_id, supplier_id, title, description, budget_value, payment_method, payment_terms, expected_date, drive_document_url, status, free_recipient, choice_justification, projects(name), suppliers(name)",
               )
               .eq("project_id", projectId)
               .order("created_at", { ascending: false })
           : supabase
           .from("budgets")
           .select(
-            "id, title, budget_value, status, free_recipient, choice_justification, projects(name), suppliers(name)",
+                "id, project_id, stage_id, category_id, supplier_id, title, description, budget_value, payment_method, payment_terms, expected_date, drive_document_url, status, free_recipient, choice_justification, projects(name), suppliers(name)",
           )
           .order("created_at", { ascending: false }))
       ).data ?? [])
@@ -123,6 +141,7 @@ export default async function BudgetsPage({
                       item.free_recipient ||
                       "Pendente"}
                   </p>
+                  {canEditBudget && ["fornecedor_pendente", "aguardando_aprovacao_financeira"].includes(item.status) ? <BudgetEditDialog budget={item} stages={stages} categories={categories} suppliers={suppliers} projectSupplierLinks={supplierLinks} returnTo={returnTo} /> : null}
                   {item.status === "fornecedor_pendente" ? (
                     <form
                       action={resolveBudgetRecipient}

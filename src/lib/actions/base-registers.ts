@@ -18,7 +18,7 @@ const fieldLimits: Record<string, number> = {
   contato: 120, endereco: 500, origem: 160, destinatario_livre: 160,
   justificativa: 2000, funcao: 20, status: 40, tipo_pessoa: 30, funcao_projeto: 20,
   projeto_id: 36, etapa_id: 36, categoria_id: 36, fornecedor_id: 36, fornecedor_existente_id: 36,
-  orcamento_id: 36, cotacao_id: 36, despesa_id: 36, pagamento_id: 36, usuario_id: 36,
+  orcamento_id: 36, cotacao_id: 36, despesa_id: 36, pagamento_id: 36, entrada_id: 36, usuario_id: 36,
   categoria_principal_id: 36, ordem: 6, valor: 16, valor_total: 16,
   orcamento_planejado: 16, data_inicio: 10, data_pagamento: 10,
   data_recebimento: 10, data_prevista: 10, data_cotacao: 10, validade_proposta: 10,
@@ -162,6 +162,19 @@ function databaseMessage(error: { message?: string } | null) {
     "A etapa precisa estar ativa e pertencer ao projeto informado",
     "A categoria precisa estar ativa, pertencer ao projeto e aceitar saídas",
     "Fornecedor inválido ou inativo",
+    "Sem permissão para editar despesa neste projeto",
+    "Não é possível editar despesa cancelada",
+    "O valor da despesa não pode ser menor que o total já pago",
+    "A descrição da despesa é obrigatória e aceita no máximo 2000 caracteres",
+    "Sem permissão para editar entrada neste projeto",
+    "Entrada não encontrada",
+    "Data e valor de entrada são obrigatórios",
+    "A origem é obrigatória e aceita no máximo 160 caracteres",
+    "A categoria precisa estar ativa, pertencer ao projeto e aceitar entradas",
+    "Sem permissão para editar orçamento neste projeto",
+    "Somente orçamentos pendentes podem ser editados",
+    "O título é obrigatório e aceita no máximo 160 caracteres",
+    "Informe um valor de orçamento maior que zero",
   ];
   if (safeDatabaseMessages.some((message) => error.message?.includes(message))) return error.message;
   return "Não foi possível salvar o registro. Verifique os dados e tente novamente.";
@@ -573,6 +586,44 @@ export async function createManualExpense(formData: FormData) {
   redirect(`${returnTo}?mensagem=Despesa+manual+cadastrada+com+sucesso.`);
 }
 
+export async function updateExpense(formData: FormData) {
+  const returnTo = returnPath(formData, "/despesas");
+  try {
+    const expenseId = readText(formData, "despesa_id", true);
+    const value = readNonNegativeNumber(formData, "valor");
+    if (!value) throw new Error("Informe um valor de despesa maior que zero.");
+    const supplierId = readText(formData, "fornecedor_id");
+    const recipient = readText(formData, "destinatario_livre");
+    if (!supplierId && !recipient) throw new Error("Informe um fornecedor ou destinatário livre.");
+    if (supplierId && recipient) throw new Error("Escolha somente um fornecedor ou destinatário livre.");
+
+    const supabase = await createClient();
+    const { data: expense, error: expenseError } = await supabase
+      .from("expenses")
+      .select("project_id")
+      .eq("id", expenseId!)
+      .maybeSingle();
+    if (expenseError || !expense) throw new Error("Despesa não encontrada.");
+    await currentProjectProfile(["admin", "financeiro"], expense.project_id);
+    const { error } = await supabase.rpc("update_expense", {
+      target_expense_id: expenseId,
+      target_stage_id: readText(formData, "etapa_id", true),
+      target_category_id: readText(formData, "categoria_id", true),
+      target_supplier_id: supplierId,
+      recipient,
+      target_description: readText(formData, "descricao", true),
+      target_value: value,
+      target_expected_date: readDate(formData, "data_prevista"),
+      document_url: readGoogleDriveUrl(formData, "link_drive"),
+      expense_notes: readText(formData, "observacoes"),
+    });
+    const message = databaseMessage(error);
+    if (message) throw new Error(message);
+    revalidatePath("/despesas"); revalidatePath("/pagamentos"); revalidatePath("/dashboard"); revalidatePath("/relatorio-mensal"); revalidatePath("/historico"); revalidateProjectContext(returnTo);
+  } catch (error) { fail(returnTo, error); }
+  redirect(`${returnTo}?mensagem=Despesa+atualizada+com+sucesso.`);
+}
+
 export async function registerPayment(formData: FormData) {
   const returnTo = returnPath(formData, "/pagamentos");
   try {
@@ -698,6 +749,78 @@ export async function createIncomeEntry(formData: FormData) {
     revalidateProjectContext(returnTo);
   } catch (error) { fail(returnTo, error); }
   redirect(`${returnTo}?mensagem=Entrada+registrada+com+sucesso.`);
+}
+
+export async function updateIncomeEntry(formData: FormData) {
+  const returnTo = returnPath(formData, "/entradas");
+  try {
+    const incomeId = readText(formData, "entrada_id", true);
+    const amount = readNonNegativeNumber(formData, "valor");
+    if (!amount) throw new Error("Informe um valor recebido maior que zero.");
+    const receivedDate = readDate(formData, "data_recebimento");
+    if (!receivedDate) throw new Error("Informe a data do recebimento.");
+    const supabase = await createClient();
+    const { data: income, error: incomeError } = await supabase
+      .from("income_entries")
+      .select("project_id")
+      .eq("id", incomeId!)
+      .maybeSingle();
+    if (incomeError || !income) throw new Error("Entrada não encontrada.");
+    await currentProjectProfile(["admin", "financeiro"], income.project_id);
+    const { error } = await supabase.rpc("update_income_entry", {
+      target_income_id: incomeId,
+      target_category_id: readText(formData, "categoria_id"),
+      target_received_date: receivedDate,
+      target_amount: amount,
+      target_origin: readText(formData, "origem", true),
+      target_description: readText(formData, "descricao"),
+      target_payment_method: readText(formData, "forma_recebimento"),
+      receipt_url: readGoogleDriveUrl(formData, "link_comprovante"),
+      income_notes: readText(formData, "observacoes"),
+    });
+    const message = databaseMessage(error);
+    if (message) throw new Error(message);
+    revalidatePath("/entradas"); revalidatePath("/dashboard"); revalidatePath("/relatorio-mensal"); revalidatePath("/historico"); revalidateProjectContext(returnTo);
+  } catch (error) { fail(returnTo, error); }
+  redirect(`${returnTo}?mensagem=Entrada+atualizada+com+sucesso.`);
+}
+
+export async function updatePendingBudget(formData: FormData) {
+  const returnTo = returnPath(formData, "/orcamentos");
+  try {
+    const budgetId = readText(formData, "orcamento_id", true);
+    const value = readNonNegativeNumber(formData, "valor");
+    if (!value) throw new Error("Informe um valor de orçamento maior que zero.");
+    const supplierId = readText(formData, "fornecedor_id");
+    const recipient = readText(formData, "destinatario_livre");
+    if (supplierId && recipient) throw new Error("Escolha somente um fornecedor ou destinatário livre.");
+    const supabase = await createClient();
+    const { data: budget, error: budgetError } = await supabase
+      .from("budgets")
+      .select("project_id")
+      .eq("id", budgetId!)
+      .maybeSingle();
+    if (budgetError || !budget) throw new Error("Orçamento não encontrado.");
+    await currentProjectProfile(["admin", "financeiro"], budget.project_id);
+    const { error } = await supabase.rpc("update_pending_budget", {
+      target_budget_id: budgetId,
+      target_stage_id: readText(formData, "etapa_id", true),
+      target_category_id: readText(formData, "categoria_id", true),
+      target_supplier_id: supplierId,
+      recipient,
+      target_title: readText(formData, "titulo", true),
+      target_description: readText(formData, "descricao"),
+      target_value: value,
+      target_payment_method: readText(formData, "forma_pagamento"),
+      target_payment_terms: readText(formData, "condicoes_pagamento"),
+      target_expected_date: readDate(formData, "data_prevista"),
+      document_url: readGoogleDriveUrl(formData, "link_drive"),
+    });
+    const message = databaseMessage(error);
+    if (message) throw new Error(message);
+    revalidatePath("/orcamentos"); revalidatePath("/despesas"); revalidatePath("/dashboard"); revalidatePath("/relatorio-mensal"); revalidatePath("/historico"); revalidateProjectContext(returnTo);
+  } catch (error) { fail(returnTo, error); }
+  redirect(`${returnTo}?mensagem=Orçamento+atualizado+com+sucesso.`);
 }
 
 export async function manageUserProfile(formData: FormData) {

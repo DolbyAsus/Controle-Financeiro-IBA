@@ -23,7 +23,10 @@ export default async function GeneralSummaryPage({
   const [projects, supabase] = await Promise.all([getAccessibleProjects(), createClient()]);
   const [incomesResult, paymentsResult, expensesResult] = await Promise.all([
     supabase.from("income_entries").select("project_id, amount").eq("status", "recebida"),
-    supabase.from("payments").select("project_id, amount"),
+    supabase
+      .from("payments")
+      .select("project_id, amount, expenses!inner(status)")
+      .neq("expenses.status", "cancelada"),
     supabase.from("expenses").select("project_id, remaining_value, status").neq("status", "cancelada"),
   ]);
   const incomes = incomesResult.data ?? [];

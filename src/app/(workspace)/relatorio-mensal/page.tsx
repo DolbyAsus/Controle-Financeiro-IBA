@@ -127,9 +127,10 @@ export default async function MonthlyReportPage({
         supabase
           .from("payments")
           .select(
-            "project_id, amount, payment_date, expenses(description), projects(name)",
+            "project_id, amount, payment_date, expenses!inner(description, status), projects(name)",
           )
           .eq("project_id", lockedProjectId)
+          .neq("expenses.status", "cancelada")
           .gte("payment_date", range.start)
           .lte("payment_date", range.end),
         supabase

@@ -1,6 +1,7 @@
 import { BanknoteArrowUp } from "lucide-react";
 
 import { createIncomeEntry } from "@/lib/actions/base-registers";
+import { IncomeEditDialog } from "@/components/incomes/income-edit-dialog";
 import { RegisterPageShell } from "@/components/modules/register-page-shell";
 import { Pagination, paginate } from "@/components/modules/pagination";
 import { Badge } from "@/components/ui/badge";
@@ -23,6 +24,7 @@ import {
 } from "@/components/ui/table";
 import { isSupabaseConfigured } from "@/lib/supabase/config";
 import { createClient } from "@/lib/supabase/server";
+import { getProjectWorkspaceAccess, getWorkspaceProfile } from "@/lib/project-access";
 
 export const dynamic = "force-dynamic";
 const money = new Intl.NumberFormat("pt-BR", {
@@ -39,6 +41,10 @@ export default async function IncomePage({
   const projectId = query.projeto;
   const returnTo = projectId ? `/projetos/${projectId}/entradas` : undefined;
   const supabase = isSupabaseConfigured() ? await createClient() : null;
+  const profile = supabase ? await getWorkspaceProfile() : null;
+  const access = projectId && supabase ? await getProjectWorkspaceAccess(projectId) : null;
+  const activeRole = access?.projectRole ?? profile?.role;
+  const canEditIncome = ["admin", "financeiro"].includes(activeRole ?? "");
   const projects = supabase
     ? ((await (projectId
         ? supabase.from("projects").select("id, name").eq("id", projectId)
@@ -50,14 +56,14 @@ export default async function IncomePage({
         await (projectId
           ? supabase
               .from("categories")
-              .select("id, name, type, projects(name)")
+              .select("id, name, type, project_id, projects(name)")
               .eq("project_id", projectId)
               .in("type", ["entrada", "ambos"])
               .eq("status", "ativo")
               .order("name")
           : supabase
           .from("categories")
-          .select("id, name, type, projects(name)")
+              .select("id, name, type, project_id, projects(name)")
           .in("type", ["entrada", "ambos"])
           .eq("status", "ativo")
           .order("name"))
@@ -69,14 +75,14 @@ export default async function IncomePage({
           ? supabase
               .from("income_entries")
               .select(
-                "id, amount, received_date, origin, payment_method, status, projects(name), categories(name)",
+                "id, project_id, category_id, amount, received_date, origin, description, payment_method, drive_receipt_url, notes, status, projects(name), categories(name)",
               )
               .eq("project_id", projectId)
               .order("received_date", { ascending: false })
           : supabase
           .from("income_entries")
           .select(
-            "id, amount, received_date, origin, payment_method, status, projects(name), categories(name)",
+                "id, project_id, category_id, amount, received_date, origin, description, payment_method, drive_receipt_url, notes, status, projects(name), categories(name)",
           )
           .order("received_date", { ascending: false }))
       ).data ?? [])
@@ -226,6 +232,7 @@ export default async function IncomePage({
                       {item.projects?.[0]?.name || "Projeto"} ·{" "}
                       {item.received_date}
                     </p>
+                    {canEditIncome ? <div className="mt-3"><IncomeEditDialog income={item} categories={categories} returnTo={returnTo} /></div> : null}
                   </article>
                 ))}
               </div>
@@ -239,6 +246,7 @@ export default async function IncomePage({
                       <TableHead>Data</TableHead>
                       <TableHead>Recebimento</TableHead>
                       <TableHead>Valor</TableHead>
+                      {canEditIncome ? <TableHead>Ações</TableHead> : null}
                     </TableRow>
                   </TableHeader>
                   <TableBody>
@@ -262,6 +270,7 @@ export default async function IncomePage({
                         <TableCell>
                           {money.format(Number(item.amount))}
                         </TableCell>
+                        {canEditIncome ? <TableCell><IncomeEditDialog income={item} categories={categories} returnTo={returnTo} /></TableCell> : null}
                       </TableRow>
                     ))}
                   </TableBody>

@@ -38,6 +38,7 @@ const date = new Intl.DateTimeFormat("pt-BR", { timeZone: "UTC" });
 type RelatedExpense = {
   description?: string | null;
   free_recipient?: string | null;
+  status?: string | null;
   suppliers?: unknown;
 };
 
@@ -103,14 +104,14 @@ export default async function PaymentsPage({
           ? supabase
               .from("payments")
               .select(
-                "id, amount, payment_date, payment_method, drive_receipt_url, notes, expenses(description, free_recipient, suppliers(name)), projects(name)",
+                "id, amount, payment_date, payment_method, drive_receipt_url, notes, expenses(description, free_recipient, status, suppliers(name)), projects(name)",
               )
               .eq("project_id", projectId)
               .order("payment_date", { ascending: false })
           : supabase
           .from("payments")
           .select(
-            "id, amount, payment_date, payment_method, drive_receipt_url, notes, expenses(description, free_recipient, suppliers(name)), projects(name)",
+            "id, amount, payment_date, payment_method, drive_receipt_url, notes, expenses(description, free_recipient, status, suppliers(name)), projects(name)",
           )
           .order("payment_date", { ascending: false }))
       ).data ?? [])
@@ -354,7 +355,11 @@ export default async function PaymentsPage({
                           new Date(`${item.payment_date}T00:00:00Z`),
                         )}
                       </p>
-                      {canEditPayments ? (
+                      {expense?.status === "cancelada" ? (
+                        <Badge className="mt-3" variant="secondary">
+                          Despesa cancelada
+                        </Badge>
+                      ) : canEditPayments ? (
                         <div className="mt-3">
                           <PaymentEditDialog
                             payment={item}
@@ -391,6 +396,11 @@ export default async function PaymentsPage({
                         <TableRow key={item.id}>
                           <TableCell className="font-medium">
                             {expense?.description || "—"}
+                            {expense?.status === "cancelada" ? (
+                              <Badge className="ml-2" variant="secondary">
+                                Despesa cancelada
+                              </Badge>
+                            ) : null}
                           </TableCell>
                           <TableCell>
                             {relatedName(expense?.suppliers) ||
@@ -415,15 +425,19 @@ export default async function PaymentsPage({
                           </TableCell>
                           {canEditPayments ? (
                             <TableCell>
-                              <PaymentEditDialog
-                                payment={item}
-                                expenseDescription={expense?.description || "Despesa"}
-                                recipient={relatedName(expense?.suppliers) || expense?.free_recipient || "—"}
-                                minimumDate={paymentWindow.minimum}
-                                maximumDate={paymentWindow.maximum}
-                                canDelete={canDeletePayments}
-                                returnTo={returnTo}
-                              />
+                              {expense?.status === "cancelada" ? (
+                                <span className="text-xs text-muted-foreground">Preservado no histórico</span>
+                              ) : (
+                                <PaymentEditDialog
+                                  payment={item}
+                                  expenseDescription={expense?.description || "Despesa"}
+                                  recipient={relatedName(expense?.suppliers) || expense?.free_recipient || "—"}
+                                  minimumDate={paymentWindow.minimum}
+                                  maximumDate={paymentWindow.maximum}
+                                  canDelete={canDeletePayments}
+                                  returnTo={returnTo}
+                                />
+                              )}
                             </TableCell>
                           ) : null}
                         </TableRow>

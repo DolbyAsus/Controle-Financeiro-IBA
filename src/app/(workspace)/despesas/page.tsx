@@ -5,6 +5,7 @@ import {
   cancelExpense,
   createManualExpense,
 } from "@/lib/actions/base-registers";
+import { ExpenseEditDialog } from "@/components/expenses/expense-edit-dialog";
 import { RegisterPageShell } from "@/components/modules/register-page-shell";
 import { Pagination, paginate } from "@/components/modules/pagination";
 import { Badge } from "@/components/ui/badge";
@@ -27,6 +28,7 @@ import {
 } from "@/components/ui/table";
 import { isSupabaseConfigured } from "@/lib/supabase/config";
 import { createClient } from "@/lib/supabase/server";
+import { getProjectWorkspaceAccess, getWorkspaceProfile } from "@/lib/project-access";
 
 export const dynamic = "force-dynamic";
 const money = new Intl.NumberFormat("pt-BR", {
@@ -55,8 +57,15 @@ export default async function ExpensesPage({
   const projectId = query.projeto;
   const returnTo = projectId ? `/projetos/${projectId}/despesas` : undefined;
   const supabase = isSupabaseConfigured() ? await createClient() : null;
-  const supplierLinks = supabase && projectId
-    ? ((await supabase.from("project_suppliers").select("supplier_id").eq("project_id", projectId).eq("status", "ativo")).data ?? [])
+  const profile = supabase ? await getWorkspaceProfile() : null;
+  const access = projectId && supabase ? await getProjectWorkspaceAccess(projectId) : null;
+  const activeRole = access?.projectRole ?? profile?.role;
+  const canEditExpense = ["admin", "financeiro"].includes(activeRole ?? "");
+  const canCancelPaidExpense = activeRole === "admin";
+  const supplierLinks = supabase
+    ? ((await (projectId
+      ? supabase.from("project_suppliers").select("project_id, supplier_id").eq("project_id", projectId).eq("status", "ativo")
+      : supabase.from("project_suppliers").select("project_id, supplier_id").eq("status", "ativo"))).data ?? [])
     : [];
   const supplierIds = supplierLinks.map((item) => item.supplier_id);
   const [
@@ -70,35 +79,35 @@ export default async function ExpensesPage({
         (projectId ? supabase
           .from("expenses")
           .select(
-            "id, description, approved_value, paid_value, remaining_value, status, free_recipient, projects(name), suppliers(name), payments(id)",
+            "id, project_id, stage_id, category_id, supplier_id, description, approved_value, paid_value, remaining_value, status, free_recipient, expected_date, drive_document_url, notes, projects(name), suppliers(name), payments(id)",
           )
           .eq("project_id", projectId)
           .order("created_at", { ascending: false }) : supabase
           .from("expenses")
           .select(
-            "id, description, approved_value, paid_value, remaining_value, status, free_recipient, projects(name), suppliers(name), payments(id)",
+            "id, project_id, stage_id, category_id, supplier_id, description, approved_value, paid_value, remaining_value, status, free_recipient, expected_date, drive_document_url, notes, projects(name), suppliers(name), payments(id)",
           )
           .order("created_at", { ascending: false })),
         projectId ? supabase.from("projects").select("id, name").eq("id", projectId) : supabase.from("projects").select("id, name").order("name"),
         (projectId ? supabase
           .from("project_stages")
-          .select("id, name, projects(name)")
+          .select("id, name, project_id, projects(name)")
           .eq("project_id", projectId)
           .eq("status", "ativo")
           .order("sort_order") : supabase
           .from("project_stages")
-          .select("id, name, projects(name)")
+          .select("id, name, project_id, projects(name)")
           .eq("status", "ativo")
           .order("sort_order")),
         (projectId ? supabase
           .from("categories")
-          .select("id, name, type, projects(name)")
+          .select("id, name, type, project_id, projects(name)")
           .eq("project_id", projectId)
           .eq("status", "ativo")
           .in("type", ["saida", "ambos"])
           .order("name") : supabase
           .from("categories")
-          .select("id, name, type, projects(name)")
+          .select("id, name, type, project_id, projects(name)")
           .eq("status", "ativo")
           .in("type", ["saida", "ambos"])
           .order("name")),
@@ -384,14 +393,10 @@ export default async function ExpensesPage({
                         ? "parcela registrada"
                         : "parcelas registradas"}
                     </p>
-                    {canPay(item.status) ? (
-                      <Link
-                        className={`${buttonVariants({ variant: "outline", size: "sm" })} mt-3`}
-                        href={projectId ? `/projetos/${projectId}/pagamentos?despesa=${item.id}` : `/pagamentos?despesa=${item.id}`}
-                      >
-                        Registrar parcela
-                      </Link>
-                    ) : null}
+                    <div className="mt-3 flex flex-wrap gap-2">
+                      {canEditExpense && item.status !== "cancelada" ? <ExpenseEditDialog expense={item} stages={stages} categories={categories} suppliers={suppliers} projectSupplierLinks={supplierLinks} returnTo={returnTo} /> : null}
+                      {canPay(item.status) ? <Link className={buttonVariants({ variant: "outline", size: "sm" })} href={projectId ? `/projetos/${projectId}/pagamentos?despesa=${item.id}` : `/pagamentos?despesa=${item.id}`}>Registrar parcela</Link> : null}
+                    </div>
                   </article>
                 ))}
               </div>
@@ -406,7 +411,7 @@ export default async function ExpensesPage({
                       <TableHead>Saldo</TableHead>
                       <TableHead>Parcelas</TableHead>
                       <TableHead>Status</TableHead>
-                      <TableHead className="text-right">Ação</TableHead>
+                      <TableHead className="text-right">Ações</TableHead>
                     </TableRow>
                   </TableHeader>
                   <TableBody>
@@ -431,22 +436,12 @@ export default async function ExpensesPage({
                             {label[item.status]}
                           </Badge>
                         </TableCell>
-                        <TableCell className="text-right">
-                          {canPay(item.status) ? (
-                            <Link
-                              className={buttonVariants({
-                                variant: "outline",
-                                size: "sm",
-                              })}
-                              href={projectId ? `/projetos/${projectId}/pagamentos?despesa=${item.id}` : `/pagamentos?despesa=${item.id}`}
-                            >
-                              Registrar parcela
-                            </Link>
-                          ) : (
-                            <span className="text-xs text-muted-foreground">
-                              —
-                            </span>
-                          )}
+                        <TableCell>
+                          <div className="flex justify-end gap-2">
+                            {canEditExpense && item.status !== "cancelada" ? <ExpenseEditDialog expense={item} stages={stages} categories={categories} suppliers={suppliers} projectSupplierLinks={supplierLinks} returnTo={returnTo} /> : null}
+                            {canPay(item.status) ? <Link className={buttonVariants({ variant: "outline", size: "sm" })} href={projectId ? `/projetos/${projectId}/pagamentos?despesa=${item.id}` : `/pagamentos?despesa=${item.id}`}>Registrar parcela</Link> : null}
+                            {!canEditExpense && !canPay(item.status) ? <span className="text-xs text-muted-foreground">—</span> : null}
+                          </div>
                         </TableCell>
                       </TableRow>
                     ))}
@@ -467,13 +462,18 @@ export default async function ExpensesPage({
           <CardTitle>Cancelar despesa</CardTitle>
           <CardDescription>
             O cancelamento exige justificativa e fica registrado no histórico.
-            Despesas com pagamentos só podem ser canceladas por Administrador.
+            A despesa cancelada continua visível, mas deixa os totais e
+            relatórios financeiros. Despesas com pagamentos só podem ser
+            canceladas por Administrador do projeto ou Administrador global.
           </CardDescription>
         </CardHeader>
         <CardContent className="grid gap-3">
           {expensePage.items
             .filter(
-              (item) => item.status !== "cancelada" && item.status !== "paga",
+              (item) =>
+                canEditExpense &&
+                item.status !== "cancelada" &&
+                ((item.payments?.length ?? 0) === 0 || canCancelPaidExpense),
             )
             .map((item) => (
               <form
@@ -497,7 +497,7 @@ export default async function ExpensesPage({
                     className="min-h-9 rounded-lg border border-input bg-transparent p-2"
                     name="justificativa"
                     required
-                    maxLength={1000}
+                    maxLength={2000}
                   />
                 </label>
                 <Button type="submit" variant="destructive">
@@ -505,8 +505,11 @@ export default async function ExpensesPage({
                 </Button>
               </form>
             ))}
-          {expenses.every(
-            (item) => item.status === "cancelada" || item.status === "paga",
+          {expensePage.items.every(
+            (item) =>
+              !canEditExpense ||
+              item.status === "cancelada" ||
+              ((item.payments?.length ?? 0) > 0 && !canCancelPaidExpense),
           ) ? (
             <p className="text-sm text-muted-foreground">
               Não há despesas disponíveis para cancelamento.

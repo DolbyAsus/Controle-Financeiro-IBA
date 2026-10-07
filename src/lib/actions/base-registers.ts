@@ -73,6 +73,8 @@ function returnPath(formData: FormData, fallback: string) {
   const value = formData.get("retorno");
   if (typeof value !== "string" || value.length > fieldLimits.retorno) return fallback;
 
+  if (value === "/selecionar-projeto") return value;
+
   return /^\/projetos\/[0-9a-f]{8}-(?:[0-9a-f]{4}-){3}[0-9a-f]{12}\/(?:etapas|categorias|fornecedores|usuarios|cotacoes|comparar-cotacoes|orcamentos|despesas|pagamentos|entradas|relatorio-mensal)$/i.test(value)
     ? value
     : fallback;
@@ -157,6 +159,7 @@ function databaseMessage(error: { message?: string } | null) {
 }
 
 export async function createProject(formData: FormData) {
+  const returnTo = returnPath(formData, "/projetos");
   try {
     const profile = await currentProfile(["admin"]);
     const supabase = await createClient();
@@ -180,8 +183,9 @@ export async function createProject(formData: FormData) {
     const message = databaseMessage(error);
     if (message) throw new Error(message);
     revalidatePath("/projetos");
-  } catch (error) { fail("/projetos", error); }
-  redirect("/projetos?mensagem=Projeto+cadastrado+com+sucesso.");
+    revalidatePath("/selecionar-projeto");
+  } catch (error) { fail(returnTo, error); }
+  redirect(`${returnTo}?mensagem=Projeto+cadastrado+com+sucesso.`);
 }
 
 export async function createStage(formData: FormData) {

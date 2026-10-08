@@ -9,7 +9,7 @@ type Props = {
   title: string;
   description: string;
   icon: LucideIcon;
-  form: ReactNode;
+  form?: ReactNode;
   createLabel?: string;
   formTitle?: string;
   formDescription?: string;
@@ -31,7 +31,7 @@ export function RegisterPageShell({ title, description, icon: Icon, form, childr
       </section>
       {safeMessage ? <p role="status" className="flex break-words gap-2 rounded-lg border border-emerald-200 bg-emerald-50 px-3 py-2 text-sm text-emerald-800"><CircleCheck className="size-4 shrink-0" />{safeMessage}</p> : null}
       {safeError ? <p role="alert" className="flex break-words gap-2 rounded-lg border border-destructive/25 bg-destructive/10 px-3 py-2 text-sm text-destructive"><CircleAlert className="size-4 shrink-0" />{safeError}</p> : null}
-      {formMode === "dialog" ? (
+      {form && formMode === "dialog" ? (
         <CreateRecordDialog
           buttonLabel={createLabel}
           title={formTitle || createLabel}
@@ -39,12 +39,12 @@ export function RegisterPageShell({ title, description, icon: Icon, form, childr
         >
           {form}
         </CreateRecordDialog>
-      ) : (
+      ) : form ? (
         <Card>
           <CardHeader><CardTitle className="flex items-center gap-2"><Icon className="size-5 text-primary" />{formTitle || (formMode === "inline" ? "Filtros" : "Informações")}</CardTitle>{formDescription ? <CardDescription>{formDescription}</CardDescription> : null}</CardHeader>
           <CardContent>{form}</CardContent>
         </Card>
-      )}
+      ) : null}
       {children}
     </div>
   );

@@ -53,6 +53,7 @@ type Props = {
   budgets: LinkedDocument[];
   expenses: LinkedDocument[];
   returnTo?: string;
+  projectId?: string;
 };
 
 const money = new Intl.NumberFormat("pt-BR", {
@@ -123,6 +124,7 @@ export function SupplierEditDialog({
   budgets,
   expenses,
   returnTo,
+  projectId,
 }: Props) {
   return (
     <Dialog>
@@ -143,6 +145,7 @@ export function SupplierEditDialog({
         <DialogBody className="space-y-6">
           <form action={updateSupplier} className="grid gap-3 md:grid-cols-2">
             <input name="fornecedor_id" type="hidden" value={supplier.id} />
+            {projectId ? <input name="projeto_id" type="hidden" value={projectId} /> : null}
             {returnTo ? <input name="retorno" type="hidden" value={returnTo} /> : null}
             <label className="grid gap-1 text-sm font-medium">
               Nome *

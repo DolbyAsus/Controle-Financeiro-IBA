@@ -3,7 +3,7 @@ import { redirect } from "next/navigation";
 
 import { approveQuotation, rejectQuotation } from "@/lib/actions/base-registers";
 import { RegisterPageShell } from "@/components/modules/register-page-shell";
-import { Pagination, paginate } from "@/components/modules/pagination";
+import { Pagination, databasePage, paginationRange } from "@/components/modules/pagination";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import {
@@ -50,7 +50,8 @@ export default async function CompareQuotationsPage({
   const query = await searchParams;
   if (!lockedProjectId) redirect("/selecionar-projeto");
   const supabase = isSupabaseConfigured() ? await createClient() : null;
-  const [stagesResult, categoriesResult, quotationsResult] =
+  const pageRange = paginationRange(query.pagina);
+  const [stagesResult, categoriesResult] =
     supabase
       ? await Promise.all([
           supabase
@@ -67,17 +68,8 @@ export default async function CompareQuotationsPage({
             .eq("status", "ativo")
             .order("name")
             .limit(300),
-          supabase
-            .from("quotations")
-            .select(
-              "id, project_id, stage_id, category_id, title, proponent_name, total_value, execution_deadline, quotation_date, payment_method, payment_terms, included_scope, excluded_scope, warranty, drive_document_url, status, rejection_justification, projects(name), project_stages(name), categories(name)",
-            )
-            .eq("project_id", lockedProjectId)
-            .in("status", statuses)
-            .order("created_at", { ascending: false })
-            .limit(200),
         ])
-      : [null, null, null];
+      : [null, null];
   const stages = stagesResult?.data ?? [];
   const categories = categoriesResult?.data ?? [];
   const stageId = stages.some((item) => item.id === query.etapa)
@@ -92,14 +84,34 @@ export default async function CompareQuotationsPage({
     ? (query.status as (typeof statuses)[number])
     : "";
   const month = isValidMonth(query.mes) ? query.mes! : "";
-  const quotations = (quotationsResult?.data ?? []).filter(
-    (item) =>
-      (!stageId || item.stage_id === stageId) &&
-      (!categoryId || item.category_id === categoryId) &&
-      (!status || item.status === status) &&
-      (!month || item.quotation_date?.startsWith(month)),
-  );
-  const quotationPage = paginate(quotations, query.pagina);
+  let quotationsQuery = supabase
+    ? supabase
+        .from("quotations")
+        .select(
+          "id, project_id, stage_id, category_id, title, proponent_name, total_value, execution_deadline, quotation_date, payment_method, payment_terms, included_scope, excluded_scope, warranty, drive_document_url, status, rejection_justification, projects(name), project_stages(name), categories(name)",
+          { count: "exact" },
+        )
+        .eq("project_id", lockedProjectId)
+        .in("status", statuses)
+    : null;
+  if (quotationsQuery && stageId) quotationsQuery = quotationsQuery.eq("stage_id", stageId);
+  if (quotationsQuery && categoryId) quotationsQuery = quotationsQuery.eq("category_id", categoryId);
+  if (quotationsQuery && status) quotationsQuery = quotationsQuery.eq("status", status);
+  if (quotationsQuery && month) {
+    const [year, monthNumber] = month.split("-").map(Number);
+    const nextMonth = new Date(Date.UTC(year, monthNumber, 1)).toISOString().slice(0, 10);
+    quotationsQuery = quotationsQuery
+      .gte("quotation_date", `${month}-01`)
+      .lt("quotation_date", nextMonth);
+  }
+  const quotationsResult = quotationsQuery
+    ? await quotationsQuery
+        .order("created_at", { ascending: false })
+        .order("id", { ascending: false })
+        .range(pageRange.from, pageRange.to)
+    : null;
+  const quotations = quotationsResult?.data ?? [];
+  const quotationPage = databasePage(quotations, quotationsResult?.count ?? 0, pageRange.page);
   const filter = (
     <form
       aria-label="Filtros de comparação"

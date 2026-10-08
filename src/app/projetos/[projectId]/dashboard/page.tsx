@@ -2,7 +2,7 @@ import { AlertCircle, ArrowDownRight, ArrowUpRight, Clock3, Wallet } from "lucid
 
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
-import { getAccessibleProject } from "@/lib/project-access";
+import { getProjectWorkspaceAccess } from "@/lib/project-access";
 import { createClient } from "@/lib/supabase/server";
 
 export const dynamic = "force-dynamic";
@@ -22,34 +22,34 @@ export default async function ProjectDashboardPage({
   searchParams: Promise<{ mes?: string }>;
 }) {
   const [{ projectId }, query] = await Promise.all([params, searchParams]);
-  const [project, supabase] = await Promise.all([getAccessibleProject(projectId), createClient()]);
-  if (!project) return null;
-  const month = validMonth(query.mes);
-
-  const [incomesResult, paymentsResult, expensesResult, quotationsResult, budgetsResult] = await Promise.all([
-    supabase.from("income_entries").select("amount, received_date").eq("project_id", project.id).eq("status", "recebida"),
-    supabase
-      .from("payments")
-      .select("amount, payment_date, expenses!inner(status)")
-      .eq("project_id", project.id)
-      .neq("expenses.status", "cancelada"),
-    supabase.from("expenses").select("approved_value, remaining_value, competence, expected_date, status").eq("project_id", project.id).neq("status", "cancelada"),
-    supabase.from("quotations").select("id").eq("project_id", project.id).eq("status", "em_analise"),
-    supabase.from("budgets").select("id, status").eq("project_id", project.id).in("status", ["fornecedor_pendente", "aguardando_aprovacao_financeira"]),
+  const [access, supabase] = await Promise.all([
+    getProjectWorkspaceAccess(projectId),
+    createClient(),
   ]);
-
-  const sum = (items: { amount?: number | string | null; approved_value?: number | string | null; remaining_value?: number | string | null }[], field: "amount" | "approved_value" | "remaining_value") => items.reduce((total, item) => total + Number(item[field] ?? 0), 0);
-  const incomes = (incomesResult.data ?? []).filter((income) => income.received_date.startsWith(month));
-  const payments = (paymentsResult.data ?? []).filter((payment) => payment.payment_date.startsWith(month));
-  const expenses = (expensesResult.data ?? []).filter((expense) => expense.competence === month || (!expense.competence && expense.expected_date?.startsWith(month)));
-  const quotations = quotationsResult.data ?? [];
-  const budgets = budgetsResult.data ?? [];
-  const income = sum(incomes, "amount");
-  const paid = sum(payments, "amount");
-  const outstanding = sum(expenses, "remaining_value");
-  const approved = sum(expenses, "approved_value");
-  const supplierPending = budgets.filter((item) => item.status === "fornecedor_pendente").length;
-  const approvalPending = budgets.length - supplierPending;
+  if (!access) return null;
+  const project = access.project;
+  const month = validMonth(query.mes);
+  const [year, monthNumber] = month.split("-").map(Number);
+  const startDate = `${month}-01`;
+  const endDate = new Date(Date.UTC(year, monthNumber, 0)).toISOString().slice(0, 10);
+  const { data: summaryRows, error: summaryError } = await supabase.rpc(
+    "get_project_financial_summary",
+    {
+      target_project_id: project.id,
+      target_start_date: startDate,
+      target_end_date: endDate,
+    },
+  );
+  if (summaryError) throw new Error("Não foi possível carregar o resumo financeiro do projeto.");
+  const summary = summaryRows?.[0];
+  const income = Number(summary?.received_income ?? 0);
+  const paid = Number(summary?.paid_expenses ?? 0);
+  const outstanding = Number(summary?.outstanding_expenses ?? 0);
+  const approved = Number(summary?.approved_expenses ?? 0);
+  const quotationsInReview = Number(summary?.quotations_in_review ?? 0);
+  const supplierPending = Number(summary?.supplier_pending_budgets ?? 0);
+  const approvalPending = Number(summary?.approval_pending_budgets ?? 0);
+  const paymentsCount = Number(summary?.payments_count ?? 0);
 
   const cards = [
     { label: "Saldo do período", value: income - paid, icon: Wallet, tone: "text-emerald-700", hint: "Entradas menos pagamentos" },
@@ -80,13 +80,13 @@ export default async function ProjectDashboardPage({
         <Card>
           <CardHeader><CardTitle>Atenção necessária</CardTitle><CardDescription>Pendências exclusivas deste projeto.</CardDescription></CardHeader>
           <CardContent className="space-y-3">
-            {[[quotations.length, "cotações em análise", "Compare as propostas e registre a decisão da comissão."], [supplierPending, "orçamentos sem destinatário", "Defina fornecedor ou destinatário livre antes da aprovação financeira."], [approvalPending, "orçamentos aguardam aprovação", "Financeiro ou Administrador pode gerar a despesa."], [outstanding, "em saldo a pagar", "Há despesas ainda não quitadas neste período."]].map(([value, title, description]) => <div key={String(title)} className="flex gap-3 rounded-lg border bg-muted/35 p-3"><AlertCircle className="mt-0.5 size-4 shrink-0 text-amber-600" aria-hidden="true" /><div><p className="text-sm font-medium">{typeof value === "number" && String(title).includes("saldo") ? money.format(value) : String(value)} {title}</p><p className="mt-0.5 text-xs text-muted-foreground">{String(description)}</p></div></div>)}
+            {[[quotationsInReview, "cotações em análise", "Compare as propostas e registre a decisão da comissão."], [supplierPending, "orçamentos sem destinatário", "Defina fornecedor ou destinatário livre antes da aprovação financeira."], [approvalPending, "orçamentos aguardam aprovação", "Financeiro ou Administrador pode gerar a despesa."], [outstanding, "em saldo a pagar", "Há despesas ainda não quitadas neste período."]].map(([value, title, description]) => <div key={String(title)} className="flex gap-3 rounded-lg border bg-muted/35 p-3"><AlertCircle className="mt-0.5 size-4 shrink-0 text-amber-600" aria-hidden="true" /><div><p className="text-sm font-medium">{typeof value === "number" && String(title).includes("saldo") ? money.format(value) : String(value)} {title}</p><p className="mt-0.5 text-xs text-muted-foreground">{String(description)}</p></div></div>)}
           </CardContent>
         </Card>
         <Card>
           <CardHeader><CardTitle>Resumo operacional</CardTitle><CardDescription>Valores e registros da competência selecionada.</CardDescription></CardHeader>
           <CardContent className="grid gap-3 sm:grid-cols-2">
-            {[ ["Cotações em análise", String(quotations.length)], ["Orçamentos pendentes", String(budgets.length)], ["Despesas do período", money.format(approved)], ["Pagamentos registrados", String(payments.length)] ].map(([label, value]) => <div key={label} className="rounded-lg border p-3"><p className="text-xs text-muted-foreground">{label}</p><p className="mt-1 text-base font-semibold">{value}</p></div>)}
+            {[ ["Cotações em análise", String(quotationsInReview)], ["Orçamentos pendentes", String(supplierPending + approvalPending)], ["Despesas do período", money.format(approved)], ["Pagamentos registrados", String(paymentsCount)] ].map(([label, value]) => <div key={label} className="rounded-lg border p-3"><p className="text-xs text-muted-foreground">{label}</p><p className="mt-1 text-base font-semibold">{value}</p></div>)}
           </CardContent>
         </Card>
       </section>

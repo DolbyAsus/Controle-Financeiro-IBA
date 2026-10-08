@@ -1,7 +1,12 @@
 import { FolderKanban } from "lucide-react";
+import { redirect } from "next/navigation";
 
 import { createProject, updateProject } from "@/lib/actions/base-registers";
-import { Pagination, paginate } from "@/components/modules/pagination";
+import {
+  Pagination,
+  databasePage,
+  paginationRange,
+} from "@/components/modules/pagination";
 import { RegisterPageShell } from "@/components/modules/register-page-shell";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -23,6 +28,7 @@ import {
 } from "@/components/ui/table";
 import { isSupabaseConfigured } from "@/lib/supabase/config";
 import { createClient } from "@/lib/supabase/server";
+import { getWorkspaceProfile } from "@/lib/project-access";
 
 export const dynamic = "force-dynamic";
 const statusLabel: Record<string, string> = {
@@ -132,19 +138,26 @@ export default async function ProjectsPage({
   searchParams: Promise<{ mensagem?: string; erro?: string; pagina?: string }>;
 }) {
   const query = await searchParams;
-  const projects: Project[] = isSupabaseConfigured()
-    ? ((
-        await (
-          await createClient()
+  const profile = isSupabaseConfigured() ? await getWorkspaceProfile() : null;
+  if (profile && profile.role !== "admin") redirect("/selecionar-projeto");
+  const pageRange = paginationRange(query.pagina);
+  const projectsResult = isSupabaseConfigured()
+    ? await (await createClient())
+        .from("projects")
+        .select(
+          "id, name, description, project_type, start_date, expected_end_date, status, main_responsible, notes",
+          { count: "exact" },
         )
-          .from("projects")
-          .select(
-            "id, name, description, project_type, start_date, expected_end_date, status, main_responsible, notes",
-          )
-          .order("created_at", { ascending: false })
-      ).data ?? [])
-    : [];
-  const projectPage = paginate(projects, query.pagina);
+        .eq("church_id", profile!.churchId)
+        .order("created_at", { ascending: false })
+        .order("id")
+        .range(pageRange.from, pageRange.to)
+    : { data: [] as Project[], count: 0 };
+  const projectPage = databasePage(
+    (projectsResult.data ?? []) as Project[],
+    projectsResult.count,
+    pageRange.page,
+  );
   return (
     <RegisterPageShell
       title="Projetos"
@@ -229,12 +242,12 @@ export default async function ProjectsPage({
         <CardHeader>
           <CardTitle>Projetos cadastrados</CardTitle>
           <CardDescription>
-            {projects.length} {projects.length === 1 ? "projeto" : "projetos"}{" "}
+            {projectPage.count} {projectPage.count === 1 ? "projeto" : "projetos"}{" "}
             disponível(is).
           </CardDescription>
         </CardHeader>
         <CardContent>
-          {projects.length === 0 ? (
+          {projectPage.count === 0 ? (
             <p className="py-6 text-sm text-muted-foreground">
               Nenhum projeto cadastrado ainda.
             </p>

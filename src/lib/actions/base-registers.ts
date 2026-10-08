@@ -115,6 +115,13 @@ async function currentProjectProfile(roles: UserRole[], projectId: string): Prom
     .eq("id", userId)
     .maybeSingle();
   if (error || !profile || profile.status !== "ativo") throw new Error("Seu perfil não está ativo.");
+  const { data: project } = await supabase
+    .from("projects")
+    .select("id")
+    .eq("id", projectId)
+    .eq("church_id", profile.church_id)
+    .maybeSingle();
+  if (!project) throw new Error("Projeto não encontrado na sua igreja.");
   if (profile.role === "admin") return { id: profile.id, churchId: profile.church_id, role: "admin" };
   const { data: membership } = await supabase
     .from("project_memberships")
@@ -276,46 +283,28 @@ export async function createSupplier(formData: FormData) {
   const returnTo = returnPath(formData, "/fornecedores");
   let projectId: string | null = null;
   try {
-    const profile = await currentProfile(["admin"]);
-    const supabase = await createClient();
     projectId = readText(formData, "projeto_id");
-    const categoryId = readText(formData, "categoria_principal_id");
-    if (categoryId) {
-      const { data: category } = await supabase.from("categories").select("id").eq("id", categoryId).maybeSingle();
-      if (!category) throw new Error("A categoria principal selecionada não está disponível.");
+    if (projectId) {
+      await currentProjectProfile(["admin", "financeiro"], projectId);
+    } else {
+      await currentProfile(["admin"]);
     }
-    const { data: supplier, error } = await supabase.from("suppliers").insert({
-      church_id: profile.churchId,
-      name: readText(formData, "nome", true),
-      person_type: readText(formData, "tipo_pessoa"),
-      document: readText(formData, "documento"),
-      main_contact: readText(formData, "contato"),
-      phone: readText(formData, "telefone"),
-      email: readText(formData, "email"),
-      address: readText(formData, "endereco"),
-      main_category_id: categoryId,
-      status: readText(formData, "status", true),
-      notes: readText(formData, "observacoes"),
-      created_by: profile.id,
-      updated_by: profile.id,
-    }).select("id").single();
+    const supabase = await createClient();
+    const { error } = await supabase.rpc("create_supplier_with_project", {
+      target_project_id: projectId,
+      supplier_name: readText(formData, "nome", true),
+      supplier_person_type: readText(formData, "tipo_pessoa"),
+      supplier_document: readText(formData, "documento"),
+      supplier_main_contact: readText(formData, "contato"),
+      supplier_phone: readText(formData, "telefone"),
+      supplier_email: readText(formData, "email"),
+      supplier_address: readText(formData, "endereco"),
+      supplier_main_category_id: readText(formData, "categoria_principal_id"),
+      supplier_status: readText(formData, "status", true),
+      supplier_notes: readText(formData, "observacoes"),
+    });
     const message = databaseMessage(error);
     if (message) throw new Error(message);
-    if (!supplier) throw new Error("Não foi possível criar o fornecedor.");
-    if (projectId) {
-      const { error: linkError } = await supabase.from("project_suppliers").insert({
-        project_id: projectId,
-        supplier_id: supplier.id,
-        status: "ativo",
-        created_by: profile.id,
-        updated_by: profile.id,
-      });
-      const linkMessage = databaseMessage(linkError);
-      if (linkMessage) {
-        await supabase.from("suppliers").delete().eq("id", supplier.id);
-        throw new Error(linkMessage);
-      }
-    }
     revalidatePath("/fornecedores");
     revalidateProjectContext(returnTo);
   } catch (error) { fail(returnTo, error); }
@@ -325,14 +314,13 @@ export async function createSupplier(formData: FormData) {
 export async function linkSupplierToProject(formData: FormData) {
   const returnTo = returnPath(formData, "/fornecedores");
   try {
-    const profile = await currentProfile(["admin"]);
+    const projectId = readText(formData, "projeto_id", true)!;
+    await currentProjectProfile(["admin", "financeiro"], projectId);
     const supabase = await createClient();
-    const { error } = await supabase.from("project_suppliers").upsert({
-      project_id: readText(formData, "projeto_id", true),
-      supplier_id: readText(formData, "fornecedor_existente_id", true),
-      status: "ativo",
-      updated_by: profile.id,
-    }, { onConflict: "project_id,supplier_id" });
+    const { error } = await supabase.rpc("link_supplier_to_project", {
+      target_project_id: projectId,
+      target_supplier_id: readText(formData, "fornecedor_existente_id", true),
+    });
     const message = databaseMessage(error);
     if (message) throw new Error(message);
     revalidatePath("/fornecedores");
@@ -352,6 +340,18 @@ export async function createQuotation(formData: FormData) {
     const quotationDate = readDate(formData, "data_cotacao");
     const validUntil = readDate(formData, "validade_proposta");
     if (quotationDate && validUntil && validUntil < quotationDate) throw new Error("A validade da proposta deve ser posterior à data da cotação.");
+    const supplierId = readText(formData, "fornecedor_id");
+    if (supplierId) {
+      const { data: supplierLink } = await supabase
+        .from("project_suppliers")
+        .select("supplier_id, suppliers!inner(status)")
+        .eq("project_id", projectId!)
+        .eq("supplier_id", supplierId)
+        .eq("status", "ativo")
+        .eq("suppliers.status", "ativo")
+        .maybeSingle();
+      if (!supplierLink) throw new Error("Fornecedor inválido ou inativo para este projeto.");
+    }
     const { error } = await supabase.from("quotations").insert({
       project_id: projectId,
       stage_id: readText(formData, "etapa_id", true),
@@ -359,7 +359,7 @@ export async function createQuotation(formData: FormData) {
       title: readText(formData, "titulo", true),
       description: readText(formData, "descricao"),
       proponent_name: readText(formData, "proponente", true),
-      supplier_id: readText(formData, "fornecedor_id"),
+      supplier_id: supplierId,
       proponent_phone: readText(formData, "telefone"),
       proponent_email: readText(formData, "email"),
       total_value: totalValue,
@@ -399,7 +399,7 @@ export async function updateQuotation(formData: FormData) {
     if (quotation.status !== "em_analise") {
       throw new Error("Apenas cotações em análise podem ser editadas.");
     }
-    const profile = await currentProjectProfile(
+    await currentProjectProfile(
       ["admin", "financeiro", "aprovador"],
       quotation.project_id,
     );
@@ -424,32 +424,29 @@ export async function updateQuotation(formData: FormData) {
         .maybeSingle();
       if (!supplierLink) throw new Error("Fornecedor inválido ou inativo para este projeto.");
     }
-    const { error } = await supabase
-      .from("quotations")
-      .update({
-        project_id: targetProjectId,
-        stage_id: readText(formData, "etapa_id", true),
-        category_id: readText(formData, "categoria_id", true),
-        title: readText(formData, "titulo", true),
-        description: readText(formData, "descricao"),
-        proponent_name: readText(formData, "proponente", true),
-        supplier_id: supplierId,
-        proponent_phone: readText(formData, "telefone"),
-        proponent_email: readText(formData, "email"),
-        total_value: totalValue,
-        execution_deadline: readText(formData, "prazo_execucao"),
-        quotation_date: quotationDate,
-        proposal_valid_until: validUntil,
-        payment_method: readText(formData, "forma_pagamento"),
-        payment_terms: readText(formData, "condicoes_pagamento"),
-        included_scope: readText(formData, "escopo_incluso"),
-        excluded_scope: readText(formData, "escopo_excluso"),
-        warranty: readText(formData, "garantia"),
-        notes: readText(formData, "observacoes"),
-        drive_document_url: readGoogleDriveUrl(formData, "link_drive"),
-        updated_by: profile.id,
-      })
-      .eq("id", quotationId!);
+    const { error } = await supabase.rpc("update_quotation", {
+      target_quotation_id: quotationId,
+      target_project_id: targetProjectId,
+      target_stage_id: readText(formData, "etapa_id", true),
+      target_category_id: readText(formData, "categoria_id", true),
+      target_title: readText(formData, "titulo", true),
+      target_description: readText(formData, "descricao"),
+      target_proponent_name: readText(formData, "proponente", true),
+      target_supplier_id: supplierId,
+      target_proponent_phone: readText(formData, "telefone"),
+      target_proponent_email: readText(formData, "email"),
+      target_total_value: totalValue,
+      target_execution_deadline: readText(formData, "prazo_execucao"),
+      target_quotation_date: quotationDate,
+      target_proposal_valid_until: validUntil,
+      target_payment_method: readText(formData, "forma_pagamento"),
+      target_payment_terms: readText(formData, "condicoes_pagamento"),
+      target_included_scope: readText(formData, "escopo_incluso"),
+      target_excluded_scope: readText(formData, "escopo_excluso"),
+      target_warranty: readText(formData, "garantia"),
+      target_notes: readText(formData, "observacoes"),
+      target_drive_document_url: readGoogleDriveUrl(formData, "link_drive"),
+    });
     const message = databaseMessage(error);
     if (message) throw new Error(message);
     revalidatePath("/cotacoes");
@@ -902,19 +899,26 @@ export async function updateProject(formData: FormData) {
 export async function updateStage(formData: FormData) {
   const returnTo = returnPath(formData, "/etapas");
   try {
-    const profile = await currentProfile(["admin", "financeiro"]);
+    const stageId = readText(formData, "etapa_id", true)!;
+    const supabase = await createClient();
+    const { data: stage, error: stageError } = await supabase
+      .from("project_stages")
+      .select("project_id")
+      .eq("id", stageId)
+      .maybeSingle();
+    if (stageError || !stage) throw new Error("Etapa não encontrada.");
+    const profile = await currentProjectProfile(["admin", "financeiro"], stage.project_id);
     const startDate = readDate(formData, "previsao_inicio"); const endDate = readDate(formData, "previsao_termino");
     if (startDate && endDate && endDate < startDate) throw new Error("A previsão de término deve ser posterior ao início.");
     const order = Number(readText(formData, "ordem", true));
     if (!Number.isInteger(order) || order < 0) throw new Error("A ordem deve ser um número inteiro positivo.");
     const plannedBudget = readNonNegativeNumber(formData, "orcamento_planejado");
     if (plannedBudget === null) throw new Error("Informe o orçamento planejado.");
-    const supabase = await createClient();
     await ensureUpdated(supabase.from("project_stages").update({
       name: readText(formData, "nome", true), code: readText(formData, "codigo"), description: readText(formData, "descricao"),
       sort_order: order, planned_budget: plannedBudget, expected_start_date: startDate, expected_end_date: endDate,
       status: readText(formData, "status", true), notes: readText(formData, "observacoes"), updated_by: profile.id,
-    }).eq("id", readText(formData, "etapa_id", true)).select("id"));
+    }).eq("id", stageId).select("id"));
     revalidatePath("/etapas"); revalidatePath("/dashboard"); revalidatePath("/relatorio-mensal"); revalidatePath("/historico"); revalidateProjectContext(returnTo);
   } catch (error) { fail(returnTo, error); }
   redirect(`${returnTo}?mensagem=Etapa+atualizada+com+sucesso.`);
@@ -923,11 +927,19 @@ export async function updateStage(formData: FormData) {
 export async function updateCategory(formData: FormData) {
   const returnTo = returnPath(formData, "/categorias");
   try {
-    const profile = await currentProfile(["admin", "financeiro"]); const supabase = await createClient();
+    const categoryId = readText(formData, "categoria_id", true)!;
+    const supabase = await createClient();
+    const { data: category, error: categoryError } = await supabase
+      .from("categories")
+      .select("project_id")
+      .eq("id", categoryId)
+      .maybeSingle();
+    if (categoryError || !category) throw new Error("Categoria não encontrada.");
+    const profile = await currentProjectProfile(["admin", "financeiro"], category.project_id);
     await ensureUpdated(supabase.from("categories").update({
       name: readText(formData, "nome", true), type: readText(formData, "tipo", true), description: readText(formData, "descricao"),
       status: readText(formData, "status", true), updated_by: profile.id,
-    }).eq("id", readText(formData, "categoria_id", true)).select("id"));
+    }).eq("id", categoryId).select("id"));
     revalidatePath("/categorias"); revalidatePath("/historico"); revalidateProjectContext(returnTo);
   } catch (error) { fail(returnTo, error); }
   redirect(`${returnTo}?mensagem=Categoria+atualizada+com+sucesso.`);
@@ -936,7 +948,12 @@ export async function updateCategory(formData: FormData) {
 export async function updateSupplier(formData: FormData) {
   const returnTo = returnPath(formData, "/fornecedores");
   try {
-    const profile = await currentProfile(["admin"]);
+    const projectId = readText(formData, "projeto_id");
+    if (projectId) {
+      await currentProjectProfile(["admin", "financeiro"], projectId);
+    } else {
+      await currentProfile(["admin"]);
+    }
     const supabase = await createClient();
     const categoryId = readText(formData, "categoria_principal_id");
     const personType = readText(formData, "tipo_pessoa");
@@ -947,29 +964,22 @@ export async function updateSupplier(formData: FormData) {
     if (!status || !["ativo", "inativo", "bloqueado"].includes(status)) {
       throw new Error("Selecione um status de fornecedor válido.");
     }
-    if (categoryId) {
-      const { data: category, error: categoryError } = await supabase
-        .from("categories")
-        .select("id")
-        .eq("id", categoryId)
-        .maybeSingle();
-      if (categoryError || !category) {
-        throw new Error("A categoria principal selecionada não está disponível.");
-      }
-    }
-    await ensureUpdated(supabase.from("suppliers").update({
-      name: readText(formData, "nome", true),
-      person_type: personType,
-      document: readText(formData, "documento"),
-      main_contact: readText(formData, "contato"),
-      phone: readText(formData, "telefone"),
-      email: readText(formData, "email"),
-      address: readText(formData, "endereco"),
-      main_category_id: categoryId,
-      status,
-      notes: readText(formData, "observacoes"),
-      updated_by: profile.id,
-    }).eq("id", readText(formData, "fornecedor_id", true)).select("id"));
+    const { error } = await supabase.rpc("update_supplier", {
+      target_supplier_id: readText(formData, "fornecedor_id", true),
+      target_project_id: projectId,
+      supplier_name: readText(formData, "nome", true),
+      supplier_person_type: personType,
+      supplier_document: readText(formData, "documento"),
+      supplier_main_contact: readText(formData, "contato"),
+      supplier_phone: readText(formData, "telefone"),
+      supplier_email: readText(formData, "email"),
+      supplier_address: readText(formData, "endereco"),
+      supplier_main_category_id: categoryId,
+      supplier_status: status,
+      supplier_notes: readText(formData, "observacoes"),
+    });
+    const message = databaseMessage(error);
+    if (message) throw new Error(message);
     revalidatePath("/fornecedores"); revalidatePath("/historico"); revalidateProjectContext(returnTo);
   } catch (error) { fail(returnTo, error); }
   redirect(`${returnTo}?mensagem=Fornecedor+atualizado+com+sucesso.`);

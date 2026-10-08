@@ -2,7 +2,11 @@ import { Users } from "lucide-react";
 import Link from "next/link";
 
 import { manageUserProfile } from "@/lib/actions/base-registers";
-import { Pagination, paginate } from "@/components/modules/pagination";
+import {
+  Pagination,
+  databasePage,
+  paginationRange,
+} from "@/components/modules/pagination";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import {
@@ -45,14 +49,32 @@ export default async function UsersPage({
       : { data: null };
   if (isSupabaseConfigured() && profile?.role !== "admin")
     redirect("/selecionar-projeto");
-  const [usersResult, projectsResult, membershipsResult] = supabase
-    ? await Promise.all([
-        supabase.from("users_profile").select("id, name, email, role, status").order("name"),
-        supabase.from("projects").select("id, name").order("name"),
-        supabase.from("project_memberships").select("project_id, user_id, role, status"),
-      ])
-    : [{ data: [] }, { data: [] }, { data: [] }];
+  const pageRange = paginationRange(query.pagina);
+  const usersResult = supabase
+    ? await supabase
+        .from("users_profile")
+        .select("id, name, email, role, status", { count: "exact" })
+        .order("name")
+        .order("id")
+        .range(pageRange.from, pageRange.to)
+    : { data: [], count: 0 };
   const users = usersResult.data ?? [];
+  const userPage = databasePage(users, usersResult.count, pageRange.page);
+  const pageUserIds = userPage.items.map((user) => user.id);
+  const membershipsResult =
+    supabase && pageUserIds.length > 0
+      ? await supabase
+          .from("project_memberships")
+          .select("project_id, user_id, role, status")
+          .in("user_id", pageUserIds)
+      : { data: [] };
+  const projectIds = [
+    ...new Set((membershipsResult.data ?? []).map((membership) => membership.project_id)),
+  ];
+  const projectsResult =
+    supabase && projectIds.length > 0
+      ? await supabase.from("projects").select("id, name").in("id", projectIds)
+      : { data: [] };
   const projects = new Map((projectsResult.data ?? []).map((project) => [project.id, project]));
   const membershipsByUser = new Map<string, { project_id: string; role: string; status: string }[]>();
   (membershipsResult.data ?? []).forEach((membership) => {
@@ -60,7 +82,6 @@ export default async function UsersPage({
     entries.push(membership);
     membershipsByUser.set(membership.user_id, entries);
   });
-  const userPage = paginate(users, query.pagina);
   return (
     <div className="space-y-6">
       <section>
@@ -96,12 +117,12 @@ export default async function UsersPage({
             Perfis e acessos por projeto
           </CardTitle>
           <CardDescription>
-            {users.length} usuários no escopo desta igreja. Administrador geral
+            {userPage.count} usuários no escopo desta igreja. Administrador geral
             pode administrar todos os projetos.
           </CardDescription>
         </CardHeader>
         <CardContent className="space-y-3">
-          {users.length === 0 ? (
+          {userPage.count === 0 ? (
             <p className="py-6 text-sm text-muted-foreground">
               Nenhum usuário encontrado.
             </p>

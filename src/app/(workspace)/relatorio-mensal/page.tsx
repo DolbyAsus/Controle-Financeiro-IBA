@@ -10,7 +10,7 @@ import {
   CardHeader,
   CardTitle,
 } from "@/components/ui/card";
-import { Pagination, paginate } from "@/components/modules/pagination";
+import { Pagination, databasePage, paginationRange } from "@/components/modules/pagination";
 import { isSupabaseConfigured } from "@/lib/supabase/config";
 import { createClient } from "@/lib/supabase/server";
 
@@ -65,6 +65,12 @@ function reportRange(query: ReportQuery) {
   };
 }
 
+function firstEligibleCompetence(start: string) {
+  if (start.endsWith("-01")) return start.slice(0, 7);
+  const [year, month] = start.split("-").map(Number);
+  return new Date(Date.UTC(year, month, 1)).toISOString().slice(0, 7);
+}
+
 export default async function MonthlyReportPage({
   searchParams,
   lockedProjectId,
@@ -76,78 +82,94 @@ export default async function MonthlyReportPage({
   if (!lockedProjectId) redirect("/selecionar-projeto");
   const range = reportRange(query);
   const supabase = isSupabaseConfigured() ? await createClient() : null;
+  const incomeRange = paginationRange(query.pagina_entradas);
+  const expenseRange = paginationRange(query.pagina_despesas);
+  const paymentRange = paginationRange(query.pagina_pagamentos);
+  const budgetRange = paginationRange(query.pagina_orcamentos);
+  const competenceStart = firstEligibleCompetence(range.start);
+  const competenceEnd = range.end.slice(0, 7);
+  const expectedDateFilter = competenceStart <= competenceEnd
+    ? `and(expected_date.gte.${range.start},expected_date.lte.${range.end}),and(expected_date.is.null,competence.gte.${competenceStart},competence.lte.${competenceEnd})`
+    : `and(expected_date.gte.${range.start},expected_date.lte.${range.end})`;
   const [
     incomesResult,
     paymentsResult,
     expensesResult,
     budgetsResult,
+    summaryResult,
   ] = supabase
     ? await Promise.all([
         supabase
           .from("income_entries")
-          .select("project_id, amount, received_date, origin, projects(name)")
+          .select("id, project_id, amount, received_date, origin, projects(name)", { count: "exact" })
           .eq("project_id", lockedProjectId)
           .eq("status", "recebida")
           .gte("received_date", range.start)
-          .lte("received_date", range.end),
+          .lte("received_date", range.end)
+          .order("received_date", { ascending: false })
+          .order("id", { ascending: false })
+          .range(incomeRange.from, incomeRange.to),
         supabase
           .from("payments")
           .select(
-            "project_id, amount, payment_date, expenses!inner(description, status), projects(name)",
+            "id, project_id, amount, payment_date, expenses!inner(description, status), projects(name)",
+            { count: "exact" },
           )
           .eq("project_id", lockedProjectId)
           .neq("expenses.status", "cancelada")
           .gte("payment_date", range.start)
-          .lte("payment_date", range.end),
+          .lte("payment_date", range.end)
+          .order("payment_date", { ascending: false })
+          .order("id", { ascending: false })
+          .range(paymentRange.from, paymentRange.to),
         supabase
           .from("expenses")
           .select(
-            "project_id, description, approved_value, remaining_value, competence, expected_date, projects(name)",
+            "id, project_id, description, approved_value, remaining_value, competence, expected_date, projects(name)",
+            { count: "exact" },
           )
           .eq("project_id", lockedProjectId)
-          .neq("status", "cancelada"),
+          .neq("status", "cancelada")
+          .or(expectedDateFilter)
+          .order("expected_date", { ascending: false, nullsFirst: false })
+          .order("id", { ascending: false })
+          .range(expenseRange.from, expenseRange.to),
         supabase
           .from("budgets")
           .select(
-            "project_id, title, budget_value, competence, expected_date, projects(name)",
+            "id, project_id, title, budget_value, competence, expected_date, projects(name)",
+            { count: "exact" },
           )
           .eq("project_id", lockedProjectId)
           .in("status", [
             "fornecedor_pendente",
             "aguardando_aprovacao_financeira",
-          ]),
+          ])
+          .or(expectedDateFilter)
+          .order("expected_date", { ascending: false, nullsFirst: false })
+          .order("id", { ascending: false })
+          .range(budgetRange.from, budgetRange.to),
+        supabase.rpc("get_project_financial_summary", {
+          target_project_id: lockedProjectId,
+          target_start_date: range.start,
+          target_end_date: range.end,
+        }),
       ])
-      : [null, null, null, null];
-  const isInRange = (date: string | null, competence?: string | null) => {
-    const reference = date || (competence ? `${competence}-01` : null);
-    return Boolean(reference && reference >= range.start && reference <= range.end);
-  };
+      : [null, null, null, null, null];
   const incomes = incomesResult?.data ?? [];
   const payments = paymentsResult?.data ?? [];
-  const expenses = (expensesResult?.data ?? []).filter(
-    (item) =>
-      isInRange(item.expected_date, item.competence),
-  );
-  const budgets = (budgetsResult?.data ?? []).filter(
-    (item) =>
-      isInRange(item.expected_date, item.competence),
-  );
-  const sum = (
-    items: {
-      amount?: number | string | null;
-      approved_value?: number | string | null;
-    }[],
-    field: "amount" | "approved_value",
-  ) => items.reduce((total, item) => total + Number(item[field] ?? 0), 0);
-  const incomeTotal = sum(incomes, "amount");
-  const paymentTotal = sum(payments, "amount");
-  const expenseTotal = sum(expenses, "approved_value");
+  const expenses = expensesResult?.data ?? [];
+  const budgets = budgetsResult?.data ?? [];
+  const summary = summaryResult?.data?.[0];
+  const incomeTotal = Number(summary?.received_income ?? 0);
+  const paymentTotal = Number(summary?.paid_expenses ?? 0);
+  const expenseTotal = Number(summary?.approved_expenses ?? 0);
   const projectName = (item: { projects?: { name: string }[] | null }) =>
     item.projects?.[0]?.name || "Projeto";
-  const incomePage = paginate(incomes, query.pagina_entradas);
-  const expensePage = paginate(expenses, query.pagina_despesas);
-  const paymentPage = paginate(payments, query.pagina_pagamentos);
-  const budgetPage = paginate(budgets, query.pagina_orcamentos);
+  const incomePage = databasePage(incomes, incomesResult?.count ?? 0, incomeRange.page);
+  const expensePage = databasePage(expenses, expensesResult?.count ?? 0, expenseRange.page);
+  const paymentPage = databasePage(payments, paymentsResult?.count ?? 0, paymentRange.page);
+  const budgetPage = databasePage(budgets, budgetsResult?.count ?? 0, budgetRange.page);
   return (
     <div className="space-y-6">
       <section className="flex flex-col gap-4 lg:flex-row lg:items-end lg:justify-between">
@@ -230,13 +252,13 @@ export default async function MonthlyReportPage({
       </Card>
       <section className="grid gap-4 xl:grid-cols-2">
         <List
-          title={`Entradas (${incomes.length})`}
+          title={`Entradas (${incomePage.count})`}
           empty="Sem entradas no período."
           pagination={{ page: incomePage.page, totalPages: incomePage.totalPages, pageParam: "pagina_entradas", label: "entradas do relatório", params: { inicio: range.start, fim: range.end } }}
         >
-          {incomePage.items.map((item, index) => (
+          {incomePage.items.map((item) => (
             <Item
-              key={`${item.origin}-${index}`}
+              key={item.id}
               title={item.origin}
               subtitle={`${projectName(item)} · ${item.received_date}`}
               value={Number(item.amount)}
@@ -244,13 +266,13 @@ export default async function MonthlyReportPage({
           ))}
         </List>
         <List
-          title={`Despesas (${expenses.length})`}
+          title={`Despesas (${expensePage.count})`}
           empty="Sem despesas previstas no período."
           pagination={{ page: expensePage.page, totalPages: expensePage.totalPages, pageParam: "pagina_despesas", label: "despesas do relatório", params: { inicio: range.start, fim: range.end } }}
         >
-          {expensePage.items.map((item, index) => (
+          {expensePage.items.map((item) => (
             <Item
-              key={`${item.description}-${index}`}
+              key={item.id}
               title={item.description}
               subtitle={`${projectName(item)} · Saldo ${money.format(Number(item.remaining_value))}`}
               value={Number(item.approved_value)}
@@ -258,13 +280,13 @@ export default async function MonthlyReportPage({
           ))}
         </List>
         <List
-          title={`Pagamentos (${payments.length})`}
+          title={`Pagamentos (${paymentPage.count})`}
           empty="Sem pagamentos no período."
           pagination={{ page: paymentPage.page, totalPages: paymentPage.totalPages, pageParam: "pagina_pagamentos", label: "pagamentos do relatório", params: { inicio: range.start, fim: range.end } }}
         >
-          {paymentPage.items.map((item, index) => (
+          {paymentPage.items.map((item) => (
             <Item
-              key={`${item.payment_date}-${index}`}
+              key={item.id}
               title={item.expenses?.[0]?.description || "Despesa"}
               subtitle={`${projectName(item)} · ${item.payment_date}`}
               value={Number(item.amount)}
@@ -272,13 +294,13 @@ export default async function MonthlyReportPage({
           ))}
         </List>
         <List
-          title={`Orçamentos pendentes (${budgets.length})`}
+          title={`Orçamentos pendentes (${budgetPage.count})`}
           empty="Sem orçamentos pendentes no período."
           pagination={{ page: budgetPage.page, totalPages: budgetPage.totalPages, pageParam: "pagina_orcamentos", label: "orçamentos do relatório", params: { inicio: range.start, fim: range.end } }}
         >
-          {budgetPage.items.map((item, index) => (
+          {budgetPage.items.map((item) => (
             <Item
-              key={`${item.title}-${index}`}
+              key={item.id}
               title={item.title}
               subtitle={projectName(item)}
               value={Number(item.budget_value)}

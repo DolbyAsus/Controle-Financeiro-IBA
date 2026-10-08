@@ -9,7 +9,7 @@ import {
   CardHeader,
   CardTitle,
 } from "@/components/ui/card";
-import { Pagination, paginate } from "@/components/modules/pagination";
+import { Pagination, databasePage, paginationRange } from "@/components/modules/pagination";
 import { isSupabaseConfigured } from "@/lib/supabase/config";
 import { createClient } from "@/lib/supabase/server";
 
@@ -29,21 +29,23 @@ export default async function HistoryPage({
 }) {
   const query = await searchParams;
   if (!lockedProjectId) redirect("/selecionar-projeto");
-  const logs = isSupabaseConfigured()
-    ? ((
-        await (
-          await createClient()
-        )
+  const pageRange = paginationRange(query.pagina);
+  const logsResult = isSupabaseConfigured()
+    ? await (
+        await createClient()
+      )
           .from("audit_logs")
           .select(
             "id, action, entity_type, created_at, projects(name), users_profile(name, email)",
+            { count: "exact" },
           )
           .eq("project_id", lockedProjectId)
           .order("created_at", { ascending: false })
-          .limit(100)
-      ).data ?? [])
-    : [];
-  const logPage = paginate(logs, query.pagina);
+          .order("id", { ascending: false })
+          .range(pageRange.from, pageRange.to)
+    : null;
+  const logs = logsResult?.data ?? [];
+  const logPage = databasePage(logs, logsResult?.count ?? 0, pageRange.page);
   return (
     <div className="space-y-6">
       <section>
@@ -63,7 +65,7 @@ export default async function HistoryPage({
             Últimas ações
           </CardTitle>
           <CardDescription>
-            {logs.length} eventos recentes, em páginas de 10 registros.
+            {logPage.count} eventos, em páginas de 10 registros.
           </CardDescription>
         </CardHeader>
         <CardContent>

@@ -5,6 +5,26 @@ import { buttonVariants } from "@/components/ui/button";
 
 export const DEFAULT_PAGE_SIZE = 10;
 
+export function paginationRange(
+  pageValue?: string,
+  pageSize = DEFAULT_PAGE_SIZE,
+) {
+  const parsedPage = Number.parseInt(pageValue ?? "1", 10);
+  const page = Number.isFinite(parsedPage) ? Math.max(parsedPage, 1) : 1;
+  const from = (page - 1) * pageSize;
+  return { page, from, to: from + pageSize - 1, pageSize };
+}
+
+export function databasePage<T>(
+  items: T[],
+  count: number | null,
+  page: number,
+  pageSize = DEFAULT_PAGE_SIZE,
+) {
+  const totalPages = Math.max(1, Math.ceil((count ?? 0) / pageSize));
+  return { items, page: Math.min(page, totalPages), totalPages, count: count ?? 0 };
+}
+
 export function paginate<T>(
   items: T[],
   pageValue?: string,

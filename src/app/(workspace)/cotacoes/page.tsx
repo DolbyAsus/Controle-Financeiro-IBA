@@ -3,7 +3,7 @@ import { ReceiptText } from "lucide-react";
 import { createQuotation } from "@/lib/actions/base-registers";
 import { QuotationEditDialog } from "@/components/quotations/quotation-edit-dialog";
 import { RegisterPageShell } from "@/components/modules/register-page-shell";
-import { Pagination, paginate } from "@/components/modules/pagination";
+import { Pagination, databasePage, paginationRange } from "@/components/modules/pagination";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import {
@@ -50,6 +50,7 @@ export default async function QuotationsPage({
   const access = projectId && supabase ? await getProjectWorkspaceAccess(projectId) : null;
   const activeRole = access?.projectRole ?? profile?.role;
   const canEditQuotation = ["admin", "financeiro", "aprovador"].includes(activeRole ?? "");
+  const pageRange = paginationRange(query.pagina);
   const projects = supabase
     ? ((await (projectId
         ? supabase.from("projects").select("id, name").eq("id", projectId)
@@ -91,13 +92,13 @@ export default async function QuotationsPage({
           : (supplierIds.length ? supabase.from("suppliers").select("id, name").in("id", supplierIds).eq("status", "ativo").order("name") : supabase.from("suppliers").select("id, name").eq("id", "00000000-0000-0000-0000-000000000000")))
       ).data ?? [])
     : [];
-  const quotations = supabase
-    ? ((
-        await (projectId
+  const quotationsResult = supabase
+    ? await (projectId
           ? supabase
               .from("quotations")
               .select(
                 "id, project_id, stage_id, category_id, supplier_id, title, description, proponent_name, proponent_phone, proponent_email, total_value, execution_deadline, quotation_date, proposal_valid_until, payment_method, payment_terms, included_scope, excluded_scope, warranty, drive_document_url, notes, status, projects(name), project_stages(name), categories(name)",
+                { count: "exact" },
               )
               .eq("project_id", projectId)
               .order("created_at", { ascending: false })
@@ -105,11 +106,14 @@ export default async function QuotationsPage({
           .from("quotations")
           .select(
             "id, project_id, stage_id, category_id, supplier_id, title, description, proponent_name, proponent_phone, proponent_email, total_value, execution_deadline, quotation_date, proposal_valid_until, payment_method, payment_terms, included_scope, excluded_scope, warranty, drive_document_url, notes, status, projects(name), project_stages(name), categories(name)",
+            { count: "exact" },
           )
           .order("created_at", { ascending: false }))
-      ).data ?? [])
-    : [];
-  const quotationPage = paginate(quotations, query.pagina);
+        .order("id", { ascending: false })
+        .range(pageRange.from, pageRange.to)
+    : null;
+  const quotations = quotationsResult?.data ?? [];
+  const quotationPage = databasePage(quotations, quotationsResult?.count ?? 0, pageRange.page);
   const dependsOnBaseRecords =
     projects.length === 0 || stages.length === 0 || categories.length === 0;
 
@@ -345,7 +349,7 @@ export default async function QuotationsPage({
         <CardHeader>
           <CardTitle>Cotações registradas</CardTitle>
           <CardDescription>
-            {quotations.length} propostas disponíveis para comparação.
+            {quotationPage.count} propostas disponíveis para comparação.
           </CardDescription>
         </CardHeader>
         <CardContent>

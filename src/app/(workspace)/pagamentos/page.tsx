@@ -3,7 +3,7 @@ import { BanknoteArrowDown } from "lucide-react";
 import { registerPayment } from "@/lib/actions/base-registers";
 import { PaymentEditDialog } from "@/components/payments/payment-edit-dialog";
 import { RegisterPageShell } from "@/components/modules/register-page-shell";
-import { Pagination, paginate } from "@/components/modules/pagination";
+import { Pagination, databasePage, paginationRange } from "@/components/modules/pagination";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import {
@@ -78,13 +78,15 @@ export default async function PaymentsPage({
   const canEditPayments = ["admin", "financeiro"].includes(activeRole ?? "");
   const canDeletePayments = activeRole === "admin";
   const paymentWindow = paymentDateWindow();
-  const expenses = supabase
-    ? ((
-        await (projectId
+  const paymentRange = paginationRange(query.pagina);
+  const expenseRange = paginationRange(query.pagina_despesas);
+  const expensesResult = supabase
+    ? await (projectId
           ? supabase
               .from("expenses")
               .select(
                 "id, description, approved_value, paid_value, remaining_value, status, free_recipient, suppliers(name), projects(name)",
+                { count: "exact" },
               )
               .eq("project_id", projectId)
               .in("status", ["aprovada", "parcialmente_paga"])
@@ -93,18 +95,20 @@ export default async function PaymentsPage({
           .from("expenses")
           .select(
             "id, description, approved_value, paid_value, remaining_value, status, free_recipient, suppliers(name), projects(name)",
+            { count: "exact" },
           )
           .in("status", ["aprovada", "parcialmente_paga"])
           .order("created_at", { ascending: false }))
-      ).data ?? [])
-    : [];
-  const payments = supabase
-    ? ((
-        await (projectId
+        .order("id", { ascending: false })
+        .range(expenseRange.from, expenseRange.to)
+    : null;
+  const paymentsResult = supabase
+    ? await (projectId
           ? supabase
               .from("payments")
               .select(
                 "id, amount, payment_date, payment_method, drive_receipt_url, notes, expenses(description, free_recipient, status, suppliers(name)), projects(name)",
+                { count: "exact" },
               )
               .eq("project_id", projectId)
               .order("payment_date", { ascending: false })
@@ -112,17 +116,35 @@ export default async function PaymentsPage({
           .from("payments")
           .select(
             "id, amount, payment_date, payment_method, drive_receipt_url, notes, expenses(description, free_recipient, status, suppliers(name)), projects(name)",
+            { count: "exact" },
           )
           .order("payment_date", { ascending: false }))
-      ).data ?? [])
-    : [];
-  const selectedExpense = expenses.find((item) => item.id === query.despesa);
-  const totalOpen = expenses.reduce(
-    (total, item) => total + Number(item.remaining_value),
-    0,
-  );
-  const paymentPage = paginate(payments, query.pagina);
-  const openExpensePage = paginate(expenses, query.pagina_despesas);
+        .order("id", { ascending: false })
+        .range(paymentRange.from, paymentRange.to)
+    : null;
+  const expenses = expensesResult?.data ?? [];
+  const payments = paymentsResult?.data ?? [];
+  const selectedOnPage = expenses.find((item) => item.id === query.despesa);
+  const selectedExpense = selectedOnPage ?? (supabase && query.despesa
+    ? (await supabase
+        .from("expenses")
+        .select("id, description, approved_value, paid_value, remaining_value, status, free_recipient, suppliers(name), projects(name)")
+        .eq("id", query.despesa)
+        .in("status", ["aprovada", "parcialmente_paga"])
+        .maybeSingle()).data
+    : null);
+  const selectableExpenses = selectedExpense && !selectedOnPage
+    ? [selectedExpense, ...expenses]
+    : expenses;
+  const expenseSummary = supabase
+    ? (await supabase.rpc("get_expense_status_summary", {
+        target_project_id: projectId ?? null,
+      })).data?.[0]
+    : null;
+  const totalOpen = Number(expenseSummary?.partial_outstanding ?? 0)
+    + Number(expenseSummary?.open_outstanding ?? 0);
+  const paymentPage = databasePage(payments, paymentsResult?.count ?? 0, paymentRange.page);
+  const openExpensePage = databasePage(expenses, expensesResult?.count ?? 0, expenseRange.page);
 
   return (
     <RegisterPageShell
@@ -163,7 +185,7 @@ export default async function PaymentsPage({
               <option disabled value="">
                 Selecione a despesa
               </option>
-              {expenses.map((item) => (
+              {selectableExpenses.map((item) => (
                 <option key={item.id} value={item.id}>
                   {item.description} ·{" "}
                   {relatedName(item.suppliers) ||
@@ -237,10 +259,10 @@ export default async function PaymentsPage({
             />
           </label>
           <div className="md:col-span-2">
-            <Button type="submit" disabled={expenses.length === 0}>
+            <Button type="submit" disabled={selectableExpenses.length === 0}>
               Registrar parcela
             </Button>
-            {expenses.length === 0 ? (
+            {selectableExpenses.length === 0 ? (
               <p className="mt-2 text-xs text-muted-foreground">
                 Não há despesas abertas para pagamento.
               </p>
@@ -253,7 +275,7 @@ export default async function PaymentsPage({
         <CardHeader>
           <CardTitle>Despesas com saldo a pagar</CardTitle>
           <CardDescription>
-            {expenses.length} despesas abertas · {money.format(totalOpen)} em
+            {openExpensePage.count} despesas abertas · {money.format(totalOpen)} em
             parcelas pendentes.
           </CardDescription>
         </CardHeader>
@@ -328,7 +350,7 @@ export default async function PaymentsPage({
         <CardHeader>
           <CardTitle>Pagamentos registrados</CardTitle>
           <CardDescription>
-            {payments.length} parcelas no histórico, identificadas pela despesa
+            {paymentPage.count} parcelas no histórico, identificadas pela despesa
             e destinatário.
           </CardDescription>
         </CardHeader>

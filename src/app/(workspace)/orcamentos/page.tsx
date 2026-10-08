@@ -7,7 +7,7 @@ import {
 import { BudgetEditDialog } from "@/components/budgets/budget-edit-dialog";
 import { CreateRecordDialog } from "@/components/modules/create-record-dialog";
 import { RegisterPageShell } from "@/components/modules/register-page-shell";
-import { Pagination, paginate } from "@/components/modules/pagination";
+import { Pagination, databasePage, paginationRange } from "@/components/modules/pagination";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import {
@@ -56,6 +56,7 @@ export default async function BudgetsPage({
   const access = projectId && supabase ? await getProjectWorkspaceAccess(projectId) : null;
   const activeRole = access?.projectRole ?? profile?.role;
   const canEditBudget = ["admin", "financeiro"].includes(activeRole ?? "");
+  const pageRange = paginationRange(query.pagina);
   const supplierLinks = supabase
     ? ((await (projectId
       ? supabase.from("project_suppliers").select("project_id, supplier_id").eq("project_id", projectId).eq("status", "ativo")
@@ -83,13 +84,13 @@ export default async function BudgetsPage({
       ? supabase.from("categories").select("id, name, project_id").eq("project_id", projectId).eq("status", "ativo").in("type", ["saida", "ambos"]).order("name")
       : supabase.from("categories").select("id, name, project_id").eq("status", "ativo").in("type", ["saida", "ambos"]).order("name"))).data ?? [])
     : [];
-  const budgets = supabase
-    ? ((
-        await (projectId
+  const budgetsResult = supabase
+    ? await (projectId
           ? supabase
               .from("budgets")
               .select(
                 "id, project_id, stage_id, category_id, supplier_id, title, description, budget_value, payment_method, payment_terms, expected_date, drive_document_url, status, free_recipient, choice_justification, projects(name), suppliers(name)",
+                { count: "exact" },
               )
               .eq("project_id", projectId)
               .order("created_at", { ascending: false })
@@ -97,11 +98,14 @@ export default async function BudgetsPage({
           .from("budgets")
           .select(
                 "id, project_id, stage_id, category_id, supplier_id, title, description, budget_value, payment_method, payment_terms, expected_date, drive_document_url, status, free_recipient, choice_justification, projects(name), suppliers(name)",
+                { count: "exact" },
           )
           .order("created_at", { ascending: false }))
-      ).data ?? [])
-    : [];
-  const budgetPage = paginate(budgets, query.pagina);
+        .order("id", { ascending: false })
+        .range(pageRange.from, pageRange.to)
+    : null;
+  const budgets = budgetsResult?.data ?? [];
+  const budgetPage = databasePage(budgets, budgetsResult?.count ?? 0, pageRange.page);
   return (
     <RegisterPageShell
       title="Orçamentos"
@@ -122,7 +126,7 @@ export default async function BudgetsPage({
         <CardHeader>
           <CardTitle>Orçamentos registrados</CardTitle>
           <CardDescription>
-            {budgets.length} orçamentos disponíveis para acompanhamento.
+            {budgetPage.count} orçamentos disponíveis para acompanhamento.
           </CardDescription>
         </CardHeader>
         <CardContent>

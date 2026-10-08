@@ -24,11 +24,24 @@ continua sendo de uma única igreja, com múltiplos projetos independentes.
 Objetivo: concluir as duas configurações externas pendentes antes de inserir
 dados financeiros reais.
 
-1. Remover URLs curinga de redirecionamento do Supabase e permitir apenas os
-   callbacks de produção e localhost.
-2. Escolher Cloudflare Turnstile ou hCaptcha e configurar CAPTCHA no Supabase.
-   O Auth nativo do Supabase não oferece Google reCAPTCHA.
-3. Manter a chave de serviço exclusivamente no Supabase/Vercel, nunca no
+1. **Concluído no código:** isolamento de igreja em todas as funções/policies
+   administrativas e financeiras.
+2. **Concluído no código:** criação e vínculo de fornecedor atômicos, edição
+   autorizada de cotação e proteção contra remoção concorrente do último
+   Administrador.
+3. **Concluído no código:** agregações financeiras no banco, paginação de
+   históricos e cadastros críticos, índices de FKs e minimização da auditoria.
+4. **Concluído no código:** Turnstile configurado no Auth local, exposição
+   automática de novas tabelas desativada e Node.js 22 como versão mínima.
+5. **Concluído no código:** testes unitários, pgTAP e pipeline de qualidade e
+   segurança no GitHub Actions.
+6. **Concluído no código:** funções privilegiadas com `search_path` vazio,
+   preflight somente leitura e runbook de implantação/reversão.
+7. **Dependência externa:** remover URLs curinga de redirecionamento no projeto
+   hospedado e permitir apenas produção e localhost.
+8. **Dependência externa:** cadastrar a chave secreta do Turnstile e ativar a
+   proteção CAPTCHA no projeto hospedado do Supabase.
+9. Manter chaves secretas exclusivamente no Supabase/Vercel, nunca no
    navegador ou no Git.
 
 Critério de saída: auditoria do Supabase sem erros, URLs de retorno estritas e
@@ -81,13 +94,16 @@ Critério de saída: dois fechamentos mensais sem divergência crítica.
 
 Prioridade sugerida:
 
-1. Paginação e busca textual para históricos extensos.
+1. Busca textual e paginação por cursor para catálogos de escala muito alta;
+   as listas críticas já usam paginação no banco.
 2. Indicadores adicionais por etapa e categoria, mantendo a decisão humana
    sobre cotações.
 3. Modelos de justificativa e checklist de aprovação.
 4. Lembretes internos de pendências e vencimentos, sem integração externa.
 5. Importação assistida da planilha legada, com validação e trilha de auditoria.
-6. Avaliar MFA para perfis Administrador e Financeiro.
+6. Implementar a experiência de cadastro e desafio MFA para Administrador e
+   Financeiro após decisão da comissão; não habilitar MFA no Auth sem o fluxo
+   completo na interface.
 7. Avaliar backup/recuperação, integrações, retenções/descontos/acréscimos,
    exportação e multi-igreja somente quando houver decisão formal.
 
@@ -107,3 +123,13 @@ contraste e legibilidade em desktop, tablet e celular.
 - Recomendação automática de cotações.
 - Upload interno de arquivos.
 - Multi-igreja.
+
+## Registro de riscos ativo
+
+| Risco | Probabilidade | Impacto | Sinal de alerta | Mitigação | Dono |
+| --- | --- | --- | --- | --- | --- |
+| CAPTCHA configurado no repositório, mas não no Supabase hospedado | Média | Alto | Login aceita requisição sem token CAPTCHA | Aplicar secret/provider no Dashboard antes de dados reais | Administrador da plataforma |
+| URLs de retorno amplas no Auth hospedado | Média | Alto | Redirect URL com curinga | Restringir allowlist a produção e localhost | Administrador da plataforma |
+| Migração validada localmente, mas ainda não aplicada ao projeto hospedado | Baixa | Alto | Divergência encontrada no preflight ou na CI | Executar preflight somente leitura, exigir CI verde e usar janela coordenada de deploy | Desenvolvimento |
+| Alertas do `braces` na cadeia dev do ESLint sem versão corrigida | Média | Baixo | `npm audit` completo acusa 5 altas; produção acusa 0 | Não processar padrões não confiáveis no lint e atualizar quando houver release | Desenvolvimento |
+| Retenção da auditoria ainda sem prazo formal | Média | Médio | Crescimento contínuo ou retenção além da necessidade | Comissão e responsável legal definem prazo; só então criar descarte automatizado e testado | Comissão / responsável legal |

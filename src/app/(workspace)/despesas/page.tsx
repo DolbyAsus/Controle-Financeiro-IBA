@@ -7,7 +7,7 @@ import {
 } from "@/lib/actions/base-registers";
 import { ExpenseEditDialog } from "@/components/expenses/expense-edit-dialog";
 import { RegisterPageShell } from "@/components/modules/register-page-shell";
-import { Pagination, paginate } from "@/components/modules/pagination";
+import { Pagination, databasePage, paginationRange } from "@/components/modules/pagination";
 import { Badge } from "@/components/ui/badge";
 import { Button, buttonVariants } from "@/components/ui/button";
 import {
@@ -62,6 +62,7 @@ export default async function ExpensesPage({
   const activeRole = access?.projectRole ?? profile?.role;
   const canEditExpense = ["admin", "financeiro"].includes(activeRole ?? "");
   const canCancelPaidExpense = activeRole === "admin";
+  const pageRange = paginationRange(query.pagina);
   const supplierLinks = supabase
     ? ((await (projectId
       ? supabase.from("project_suppliers").select("project_id, supplier_id").eq("project_id", projectId).eq("status", "ativo")
@@ -74,20 +75,27 @@ export default async function ExpensesPage({
     stagesResult,
     categoriesResult,
     suppliersResult,
+    summaryResult,
   ] = supabase
     ? await Promise.all([
         (projectId ? supabase
           .from("expenses")
           .select(
             "id, project_id, stage_id, category_id, supplier_id, description, approved_value, paid_value, remaining_value, status, free_recipient, expected_date, drive_document_url, notes, projects(name), suppliers(name), payments(id)",
+            { count: "exact" },
           )
           .eq("project_id", projectId)
-          .order("created_at", { ascending: false }) : supabase
+          .order("created_at", { ascending: false })
+          .order("id", { ascending: false })
+          .range(pageRange.from, pageRange.to) : supabase
           .from("expenses")
           .select(
             "id, project_id, stage_id, category_id, supplier_id, description, approved_value, paid_value, remaining_value, status, free_recipient, expected_date, drive_document_url, notes, projects(name), suppliers(name), payments(id)",
+            { count: "exact" },
           )
-          .order("created_at", { ascending: false })),
+          .order("created_at", { ascending: false })
+          .order("id", { ascending: false })
+          .range(pageRange.from, pageRange.to)),
         projectId ? supabase.from("projects").select("id, name").eq("id", projectId) : supabase.from("projects").select("id, name").order("name"),
         (projectId ? supabase
           .from("project_stages")
@@ -116,8 +124,11 @@ export default async function ExpensesPage({
           .select("id, name")
           .eq("status", "ativo")
           .order("name")),
+        supabase.rpc("get_expense_status_summary", {
+          target_project_id: projectId ?? null,
+        }),
       ])
-    : [null, null, null, null, null];
+    : [null, null, null, null, null, null];
   const expenses = expensesResult?.data ?? [];
   const projects = projectsResult?.data ?? [];
   const stages = stagesResult?.data ?? [];
@@ -129,12 +140,8 @@ export default async function ExpensesPage({
     relatedName(item.suppliers) || item.free_recipient || "—";
   const dependsOnBaseRecords =
     projects.length === 0 || stages.length === 0 || categories.length === 0;
-  const expensePage = paginate(expenses, query.pagina);
-  const partialExpenses = expenses.filter(
-    (item) => item.status === "parcialmente_paga",
-  );
-  const paidExpenses = expenses.filter((item) => item.status === "paga");
-  const openExpenses = expenses.filter((item) => item.status === "aprovada");
+  const expensePage = databasePage(expenses, expensesResult?.count ?? 0, pageRange.page);
+  const expenseSummary = summaryResult?.data?.[0];
 
   return (
     <RegisterPageShell
@@ -316,16 +323,13 @@ export default async function ExpensesPage({
           <CardHeader>
             <CardDescription>Pagas parcialmente</CardDescription>
             <CardTitle className="text-xl text-amber-700">
-              {partialExpenses.length}
+              {Number(expenseSummary?.partial_count ?? 0)}
             </CardTitle>
           </CardHeader>
           <CardContent className="text-xs text-muted-foreground">
             Saldo pendente:{" "}
             {money.format(
-              partialExpenses.reduce(
-                (total, item) => total + Number(item.remaining_value),
-                0,
-              ),
+              Number(expenseSummary?.partial_outstanding ?? 0),
             )}
           </CardContent>
         </Card>
@@ -333,16 +337,13 @@ export default async function ExpensesPage({
           <CardHeader>
             <CardDescription>Pagas</CardDescription>
             <CardTitle className="text-xl text-emerald-700">
-              {paidExpenses.length}
+              {Number(expenseSummary?.paid_count ?? 0)}
             </CardTitle>
           </CardHeader>
           <CardContent className="text-xs text-muted-foreground">
             Total quitado:{" "}
             {money.format(
-              paidExpenses.reduce(
-                (total, item) => total + Number(item.paid_value),
-                0,
-              ),
+              Number(expenseSummary?.paid_total ?? 0),
             )}
           </CardContent>
         </Card>
@@ -350,7 +351,7 @@ export default async function ExpensesPage({
           <CardHeader>
             <CardDescription>Aguardando pagamento</CardDescription>
             <CardTitle className="text-xl text-primary">
-              {openExpenses.length}
+              {Number(expenseSummary?.open_count ?? 0)}
             </CardTitle>
           </CardHeader>
           <CardContent className="text-xs text-muted-foreground">
@@ -362,7 +363,7 @@ export default async function ExpensesPage({
         <CardHeader>
           <CardTitle>Despesas cadastradas</CardTitle>
           <CardDescription>
-            {expenses.length} despesas registradas. Registre parcelas
+            {expensePage.count} despesas registradas. Registre parcelas
             diretamente na despesa aberta.
           </CardDescription>
         </CardHeader>

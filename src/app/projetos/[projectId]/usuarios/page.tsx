@@ -3,7 +3,11 @@ import { redirect } from "next/navigation";
 
 import { Badge } from "@/components/ui/badge";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
-import { Pagination, paginate } from "@/components/modules/pagination";
+import {
+  Pagination,
+  databasePage,
+  paginationRange,
+} from "@/components/modules/pagination";
 import { ProjectUserAccessDialog, type ProjectUserAccess } from "@/components/users/project-user-access-dialog";
 import { getProjectWorkspaceAccess } from "@/lib/project-access";
 import { isSupabaseConfigured } from "@/lib/supabase/config";
@@ -33,30 +37,73 @@ export default async function ProjectUsersPage({
 
   const isGlobalAdmin = access.profile.role === "admin";
   const supabase = isSupabaseConfigured() ? await createClient() : null;
-  const membershipsResult = supabase
+  const pageRange = paginationRange(query.pagina);
+  const memberCountResult = supabase
     ? await supabase
+        .from("project_memberships")
+        .select("user_id", { count: "exact", head: true })
+        .eq("project_id", projectId)
+    : { count: 0 };
+  const visibleMembers = memberCountResult.count ?? 0;
+  type ProjectUser = {
+    id: string;
+    name: string;
+    email: string;
+    status: "ativo" | "inativo";
+  };
+  let users: ProjectUser[] = [];
+  let membershipRows: (ProjectUserAccess & { user_id: string })[] = [];
+  let totalUsers = 0;
+
+  if (supabase && isGlobalAdmin) {
+    const usersResult = await supabase
+      .from("users_profile")
+      .select("id, name, email, status", { count: "exact" })
+      .order("name")
+      .order("id")
+      .range(pageRange.from, pageRange.to);
+    users = (usersResult.data ?? []) as ProjectUser[];
+    totalUsers = usersResult.count ?? 0;
+    const pageUserIds = users.map((user) => user.id);
+    if (pageUserIds.length > 0) {
+      const membershipsResult = await supabase
         .from("project_memberships")
         .select("user_id, role, status")
         .eq("project_id", projectId)
-    : { data: [] };
+        .in("user_id", pageUserIds);
+      membershipRows = (membershipsResult.data ?? []) as (ProjectUserAccess & {
+        user_id: string;
+      })[];
+    }
+  } else if (supabase) {
+    const usersResult = await supabase
+      .from("users_profile")
+      .select(
+        "id, name, email, status, project_memberships!inner(user_id, role, status)",
+        { count: "exact" },
+      )
+      .eq("project_memberships.project_id", projectId)
+      .order("name")
+      .order("id")
+      .range(pageRange.from, pageRange.to);
+    totalUsers = usersResult.count ?? 0;
+    (usersResult.data ?? []).forEach((row) => {
+      users.push({
+        id: row.id,
+        name: row.name,
+        email: row.email,
+        status: row.status as ProjectUser["status"],
+      });
+      membershipRows.push(
+        ...(row.project_memberships as (ProjectUserAccess & { user_id: string })[]),
+      );
+    });
+  }
 
   const memberships = new Map(
-    (membershipsResult.data ?? []).map((membership) => [
-      membership.user_id,
-      membership as ProjectUserAccess & { user_id: string },
-    ]),
+    membershipRows.map((membership) => [membership.user_id, membership]),
   );
-  const membershipUserIds = (membershipsResult.data ?? []).map((membership) => membership.user_id);
-  const usersResult = supabase
-    ? isGlobalAdmin
-      ? await supabase.from("users_profile").select("id, name, email, status").order("name")
-      : membershipUserIds.length > 0
-        ? await supabase.from("users_profile").select("id, name, email, status").in("id", membershipUserIds).order("name")
-        : { data: [] }
-    : { data: [] };
-  const users = usersResult.data ?? [];
-  const userPage = paginate(users, query.pagina);
-  const visibleMembers = memberships.size;
+  const userPage = databasePage(users, totalUsers, pageRange.page);
 
   return (
     <div className="space-y-6">
@@ -91,12 +138,12 @@ export default async function ProjectUsersPage({
           </CardTitle>
           <CardDescription>
             {isGlobalAdmin
-              ? `${users.length} usuários cadastrados na igreja. ${visibleMembers} já estão vinculados a este projeto.`
+              ? `${userPage.count} usuários cadastrados na igreja. ${visibleMembers} já estão vinculados a este projeto.`
               : `${visibleMembers} usuários vinculados a este projeto. A inclusão de novos usuários é feita pelo Administrador geral.`}
           </CardDescription>
         </CardHeader>
         <CardContent className="space-y-3">
-          {users.length === 0 ? (
+          {userPage.count === 0 ? (
             <p className="py-6 text-sm text-muted-foreground">
               {isGlobalAdmin
                 ? "Nenhum usuário está disponível para vincular. Crie ou convide a pessoa no Supabase e ela aparecerá aqui."

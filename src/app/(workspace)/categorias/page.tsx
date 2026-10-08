@@ -3,7 +3,7 @@ import { Tags } from "lucide-react";
 import { createCategory } from "@/lib/actions/base-registers";
 import { CategoryEditDialog } from "@/components/categories/category-edit-dialog";
 import { RegisterPageShell } from "@/components/modules/register-page-shell";
-import { Pagination, paginate } from "@/components/modules/pagination";
+import { Pagination, databasePage, paginationRange } from "@/components/modules/pagination";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import {
@@ -24,6 +24,7 @@ import {
 } from "@/components/ui/table";
 import { isSupabaseConfigured } from "@/lib/supabase/config";
 import { createClient } from "@/lib/supabase/server";
+import { getProjectWorkspaceAccess, getWorkspaceProfile } from "@/lib/project-access";
 
 export const dynamic = "force-dynamic";
 const typeLabel: Record<string, string> = {
@@ -41,27 +42,33 @@ export default async function CategoriesPage({
   const projectId = query.projeto;
   const returnTo = projectId ? `/projetos/${projectId}/categorias` : undefined;
   const supabase = isSupabaseConfigured() ? await createClient() : null;
+  const profile = supabase ? await getWorkspaceProfile() : null;
+  const access = projectId && supabase ? await getProjectWorkspaceAccess(projectId) : null;
+  const canManage = projectId
+    ? access?.projectRole === "admin" || access?.projectRole === "financeiro"
+    : profile?.role === "admin";
+  const pageRange = paginationRange(query.pagina);
   const projects = supabase
     ? ((await (projectId
         ? supabase.from("projects").select("id, name").eq("id", projectId)
         : supabase.from("projects").select("id, name").order("name")))
         .data ?? [])
     : [];
-  const categories = supabase
-    ? ((
-        await (projectId
+  const categoriesResult = supabase
+    ? await (projectId
           ? supabase
               .from("categories")
-              .select("id, name, type, description, status, projects(name)")
+              .select("id, name, type, description, status, projects(name)", { count: "exact" })
               .eq("project_id", projectId)
               .order("name")
           : supabase
           .from("categories")
-          .select("id, name, type, description, status, projects(name)")
+          .select("id, name, type, description, status, projects(name)", { count: "exact" })
           .order("name"))
-      ).data ?? [])
-    : [];
-  const categoryPage = paginate(categories, query.pagina);
+        .range(pageRange.from, pageRange.to)
+    : null;
+  const categories = categoriesResult?.data ?? [];
+  const categoryPage = databasePage(categories, categoriesResult?.count ?? 0, pageRange.page);
   const visibleCategoryIds = categoryPage.items.map((category) => category.id);
   const [linkedQuotations, linkedBudgets, linkedExpenses, linkedIncomes] = supabase && visibleCategoryIds.length > 0
     ? await Promise.all([
@@ -84,7 +91,7 @@ export default async function CategoriesPage({
       formTitle="Nova categoria"
       message={query.mensagem}
       error={query.erro}
-      form={
+      form={canManage ? (
         <form action={createCategory} className="grid gap-4 md:grid-cols-2">
           {projectId ? <><input name="projeto_id" type="hidden" value={projectId} /><input name="retorno" type="hidden" value={returnTo} /></> : <label className="grid gap-1.5 text-sm font-medium">
             Projeto *
@@ -156,13 +163,13 @@ export default async function CategoriesPage({
             ) : null}
           </div>
         </form>
-      }
+      ) : null}
     >
       <Card>
         <CardHeader>
           <CardTitle>Categorias cadastradas</CardTitle>
           <CardDescription>
-            {categories.length} categorias disponíveis.
+            {categoryPage.count} categorias disponíveis.
           </CardDescription>
         </CardHeader>
         <CardContent>
@@ -185,7 +192,7 @@ export default async function CategoriesPage({
                       {category.projects?.[0]?.name || "Projeto"} ·{" "}
                       {category.status}
                     </p>
-                    <div className="mt-3"><CategoryEditDialog category={category} quotations={quotations.filter((item) => item.category_id === category.id).map((item) => ({ id: item.id, title: item.title, value: item.total_value, status: item.status, projectName: item.projects?.[0]?.name || "Projeto" }))} budgets={budgets.filter((item) => item.category_id === category.id).map((item) => ({ id: item.id, title: item.title, value: item.budget_value, status: item.status, projectName: item.projects?.[0]?.name || "Projeto" }))} expenses={expenses.filter((item) => item.category_id === category.id).map((item) => ({ id: item.id, title: item.description, value: item.approved_value, status: item.status, projectName: item.projects?.[0]?.name || "Projeto" }))} incomes={incomes.filter((item) => item.category_id === category.id).map((item) => ({ id: item.id, title: item.origin, value: item.amount, status: item.status, projectName: item.projects?.[0]?.name || "Projeto" }))} returnTo={returnTo} /></div>
+                    {canManage ? <div className="mt-3"><CategoryEditDialog category={category} quotations={quotations.filter((item) => item.category_id === category.id).map((item) => ({ id: item.id, title: item.title, value: item.total_value, status: item.status, projectName: item.projects?.[0]?.name || "Projeto" }))} budgets={budgets.filter((item) => item.category_id === category.id).map((item) => ({ id: item.id, title: item.title, value: item.budget_value, status: item.status, projectName: item.projects?.[0]?.name || "Projeto" }))} expenses={expenses.filter((item) => item.category_id === category.id).map((item) => ({ id: item.id, title: item.description, value: item.approved_value, status: item.status, projectName: item.projects?.[0]?.name || "Projeto" }))} incomes={incomes.filter((item) => item.category_id === category.id).map((item) => ({ id: item.id, title: item.origin, value: item.amount, status: item.status, projectName: item.projects?.[0]?.name || "Projeto" }))} returnTo={returnTo} /></div> : null}
                   </article>
                 ))}
               </div>
@@ -197,7 +204,7 @@ export default async function CategoriesPage({
                       <TableHead>Projeto</TableHead>
                       <TableHead>Uso</TableHead>
                       <TableHead>Status</TableHead>
-                      <TableHead className="text-right">Ações</TableHead>
+                      {canManage ? <TableHead className="text-right">Ações</TableHead> : null}
                     </TableRow>
                   </TableHeader>
                   <TableBody>
@@ -215,7 +222,7 @@ export default async function CategoriesPage({
                           </Badge>
                         </TableCell>
                         <TableCell>{category.status}</TableCell>
-                        <TableCell className="text-right"><CategoryEditDialog category={category} quotations={quotations.filter((item) => item.category_id === category.id).map((item) => ({ id: item.id, title: item.title, value: item.total_value, status: item.status, projectName: item.projects?.[0]?.name || "Projeto" }))} budgets={budgets.filter((item) => item.category_id === category.id).map((item) => ({ id: item.id, title: item.title, value: item.budget_value, status: item.status, projectName: item.projects?.[0]?.name || "Projeto" }))} expenses={expenses.filter((item) => item.category_id === category.id).map((item) => ({ id: item.id, title: item.description, value: item.approved_value, status: item.status, projectName: item.projects?.[0]?.name || "Projeto" }))} incomes={incomes.filter((item) => item.category_id === category.id).map((item) => ({ id: item.id, title: item.origin, value: item.amount, status: item.status, projectName: item.projects?.[0]?.name || "Projeto" }))} returnTo={returnTo} /></TableCell>
+                        {canManage ? <TableCell className="text-right"><CategoryEditDialog category={category} quotations={quotations.filter((item) => item.category_id === category.id).map((item) => ({ id: item.id, title: item.title, value: item.total_value, status: item.status, projectName: item.projects?.[0]?.name || "Projeto" }))} budgets={budgets.filter((item) => item.category_id === category.id).map((item) => ({ id: item.id, title: item.title, value: item.budget_value, status: item.status, projectName: item.projects?.[0]?.name || "Projeto" }))} expenses={expenses.filter((item) => item.category_id === category.id).map((item) => ({ id: item.id, title: item.description, value: item.approved_value, status: item.status, projectName: item.projects?.[0]?.name || "Projeto" }))} incomes={incomes.filter((item) => item.category_id === category.id).map((item) => ({ id: item.id, title: item.origin, value: item.amount, status: item.status, projectName: item.projects?.[0]?.name || "Projeto" }))} returnTo={returnTo} /></TableCell> : null}
                       </TableRow>
                     ))}
                   </TableBody>

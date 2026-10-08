@@ -5,10 +5,10 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
-import { Pagination, paginate } from "@/components/modules/pagination";
+import { Pagination } from "@/components/modules/pagination";
 import { CreateRecordDialog } from "@/components/modules/create-record-dialog";
 import { createProject } from "@/lib/actions/base-registers";
-import { getAccessibleProjects, getWorkspaceProfile } from "@/lib/project-access";
+import { getAccessibleProjectsPage, getWorkspaceProfile } from "@/lib/project-access";
 
 export const dynamic = "force-dynamic";
 
@@ -84,11 +84,11 @@ export default async function SelectProjectPage({
   searchParams: Promise<{ pagina?: string }>;
 }) {
   const query = await searchParams;
-  const [profile, projects] = await Promise.all([
-    getWorkspaceProfile(),
-    getAccessibleProjects(),
-  ]);
-  const projectPage = paginate(projects, query.pagina);
+  const profile = await getWorkspaceProfile();
+  const projectPage = await getAccessibleProjectsPage(
+    profile.churchId,
+    query.pagina,
+  );
 
   return (
     <div className="space-y-6">
@@ -118,7 +118,7 @@ export default async function SelectProjectPage({
         </>
       ) : null}
 
-      {projects.length === 0 ? (
+      {projectPage.count === 0 ? (
         <Card>
           <CardContent className="py-10 text-sm text-muted-foreground">
             Você ainda não possui acesso a nenhum projeto. Solicite ao Administrador o vínculo correto.

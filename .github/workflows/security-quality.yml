@@ -1,0 +1,49 @@
+name: Security and quality
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+
+permissions:
+  contents: read
+
+jobs:
+  application:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci
+      - run: npm run lint
+      - run: npm run typecheck
+      - run: npm test
+      - run: npm audit --omit=dev --audit-level=high
+      - run: npm run build
+        env:
+          NEXT_PUBLIC_SUPABASE_URL: https://example.supabase.co
+          NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY: sb_publishable_ci_placeholder
+          NEXT_PUBLIC_SITE_URL: http://localhost:3000
+          NEXT_PUBLIC_TURNSTILE_SITE_KEY: 1x00000000000000000000AA
+
+  database:
+    runs-on: ubuntu-latest
+    env:
+      SUPABASE_AUTH_CAPTCHA_SECRET: 1x0000000000000000000000000000000AA
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci
+      - run: npx --yes supabase@2.120.0 start
+      - run: npx --yes supabase@2.120.0 db reset --local
+      - run: npm run test:db
+      - run: npx --yes supabase@2.120.0 db lint --local --level error --fail-on error
+      - run: npx --yes supabase@2.120.0 db advisors --local --type all --level warn --fail-on warn
+      - if: always()
+        run: npx --yes supabase@2.120.0 stop --no-backup

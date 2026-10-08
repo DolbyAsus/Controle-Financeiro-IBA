@@ -3,7 +3,7 @@ import { BanknoteArrowUp } from "lucide-react";
 import { createIncomeEntry } from "@/lib/actions/base-registers";
 import { IncomeEditDialog } from "@/components/incomes/income-edit-dialog";
 import { RegisterPageShell } from "@/components/modules/register-page-shell";
-import { Pagination, paginate } from "@/components/modules/pagination";
+import { Pagination, databasePage, paginationRange } from "@/components/modules/pagination";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import {
@@ -45,6 +45,7 @@ export default async function IncomePage({
   const access = projectId && supabase ? await getProjectWorkspaceAccess(projectId) : null;
   const activeRole = access?.projectRole ?? profile?.role;
   const canEditIncome = ["admin", "financeiro"].includes(activeRole ?? "");
+  const pageRange = paginationRange(query.pagina);
   const projects = supabase
     ? ((await (projectId
         ? supabase.from("projects").select("id, name").eq("id", projectId)
@@ -69,13 +70,13 @@ export default async function IncomePage({
           .order("name"))
       ).data ?? [])
     : [];
-  const entries = supabase
-    ? ((
-        await (projectId
+  const entriesResult = supabase
+    ? await (projectId
           ? supabase
               .from("income_entries")
               .select(
                 "id, project_id, category_id, amount, received_date, origin, description, payment_method, drive_receipt_url, notes, status, projects(name), categories(name)",
+                { count: "exact" },
               )
               .eq("project_id", projectId)
               .order("received_date", { ascending: false })
@@ -83,11 +84,14 @@ export default async function IncomePage({
           .from("income_entries")
           .select(
                 "id, project_id, category_id, amount, received_date, origin, description, payment_method, drive_receipt_url, notes, status, projects(name), categories(name)",
+                { count: "exact" },
           )
           .order("received_date", { ascending: false }))
-      ).data ?? [])
-    : [];
-  const entryPage = paginate(entries, query.pagina);
+        .order("id", { ascending: false })
+        .range(pageRange.from, pageRange.to)
+    : null;
+  const entries = entriesResult?.data ?? [];
+  const entryPage = databasePage(entries, entriesResult?.count ?? 0, pageRange.page);
   return (
     <RegisterPageShell
       title="Entradas"
@@ -211,7 +215,7 @@ export default async function IncomePage({
         <CardHeader>
           <CardTitle>Entradas recebidas</CardTitle>
           <CardDescription>
-            {entries.length} registros financeiros.
+            {entryPage.count} registros financeiros.
           </CardDescription>
         </CardHeader>
         <CardContent>

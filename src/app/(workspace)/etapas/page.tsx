@@ -3,7 +3,7 @@ import { ClipboardList } from "lucide-react";
 import { createStage } from "@/lib/actions/base-registers";
 import { StageEditDialog } from "@/components/stages/stage-edit-dialog";
 import { RegisterPageShell } from "@/components/modules/register-page-shell";
-import { Pagination, paginate } from "@/components/modules/pagination";
+import { Pagination, databasePage, paginationRange } from "@/components/modules/pagination";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import {
@@ -24,6 +24,7 @@ import {
 } from "@/components/ui/table";
 import { isSupabaseConfigured } from "@/lib/supabase/config";
 import { createClient } from "@/lib/supabase/server";
+import { getProjectWorkspaceAccess, getWorkspaceProfile } from "@/lib/project-access";
 
 export const dynamic = "force-dynamic";
 const money = new Intl.NumberFormat("pt-BR", {
@@ -40,19 +41,25 @@ export default async function StagesPage({
   const projectId = query.projeto;
   const returnTo = projectId ? `/projetos/${projectId}/etapas` : undefined;
   const supabase = isSupabaseConfigured() ? await createClient() : null;
+  const profile = supabase ? await getWorkspaceProfile() : null;
+  const access = projectId && supabase ? await getProjectWorkspaceAccess(projectId) : null;
+  const canManage = projectId
+    ? access?.projectRole === "admin" || access?.projectRole === "financeiro"
+    : profile?.role === "admin";
+  const pageRange = paginationRange(query.pagina);
   const projects = supabase
     ? ((await (projectId
         ? supabase.from("projects").select("id, name").eq("id", projectId)
         : supabase.from("projects").select("id, name").order("name")))
         .data ?? [])
     : [];
-  const stages = supabase
-    ? ((
-        await (projectId
+  const stagesResult = supabase
+    ? await (projectId
           ? supabase
               .from("project_stages")
               .select(
                 "id, name, code, description, sort_order, planned_budget, expected_start_date, expected_end_date, status, notes, projects(name)",
+                { count: "exact" },
               )
               .eq("project_id", projectId)
               .order("sort_order")
@@ -60,11 +67,13 @@ export default async function StagesPage({
           .from("project_stages")
           .select(
             "id, name, code, description, sort_order, planned_budget, expected_start_date, expected_end_date, status, notes, projects(name)",
+            { count: "exact" },
           )
           .order("sort_order"))
-      ).data ?? [])
-    : [];
-  const stagePage = paginate(stages, query.pagina);
+        .range(pageRange.from, pageRange.to)
+    : null;
+  const stages = stagesResult?.data ?? [];
+  const stagePage = databasePage(stages, stagesResult?.count ?? 0, pageRange.page);
   const visibleStageIds = stagePage.items.map((stage) => stage.id);
   const [linkedQuotations, linkedBudgets, linkedExpenses] = supabase && visibleStageIds.length > 0
     ? await Promise.all([
@@ -85,7 +94,7 @@ export default async function StagesPage({
       formTitle="Nova etapa"
       message={query.mensagem}
       error={query.erro}
-      form={
+      form={canManage ? (
         <form action={createStage} className="grid gap-4 md:grid-cols-2">
           {projectId ? <><input name="projeto_id" type="hidden" value={projectId} /><input name="retorno" type="hidden" value={returnTo} /></> : <label className="grid gap-1.5 text-sm font-medium">
             Projeto *
@@ -199,12 +208,12 @@ export default async function StagesPage({
             ) : null}
           </div>
         </form>
-      }
+      ) : null}
     >
       <Card>
         <CardHeader>
           <CardTitle>Etapas cadastradas</CardTitle>
-          <CardDescription>{stages.length} etapas disponíveis.</CardDescription>
+          <CardDescription>{stagePage.count} etapas disponíveis.</CardDescription>
         </CardHeader>
         <CardContent>
           {stages.length === 0 ? (
@@ -224,7 +233,7 @@ export default async function StagesPage({
                       {stage.projects?.[0]?.name || "Projeto"} ·{" "}
                       {money.format(Number(stage.planned_budget))}
                     </p>
-                    <div className="mt-3"><StageEditDialog stage={stage} quotations={quotations.filter((item) => item.stage_id === stage.id).map((item) => ({ id: item.id, title: item.title, value: item.total_value, status: item.status, projectName: item.projects?.[0]?.name || "Projeto" }))} budgets={budgets.filter((item) => item.stage_id === stage.id).map((item) => ({ id: item.id, title: item.title, value: item.budget_value, status: item.status, projectName: item.projects?.[0]?.name || "Projeto" }))} expenses={expenses.filter((item) => item.stage_id === stage.id).map((item) => ({ id: item.id, title: item.description, value: item.approved_value, status: item.status, projectName: item.projects?.[0]?.name || "Projeto" }))} returnTo={returnTo} /></div>
+                    {canManage ? <div className="mt-3"><StageEditDialog stage={stage} quotations={quotations.filter((item) => item.stage_id === stage.id).map((item) => ({ id: item.id, title: item.title, value: item.total_value, status: item.status, projectName: item.projects?.[0]?.name || "Projeto" }))} budgets={budgets.filter((item) => item.stage_id === stage.id).map((item) => ({ id: item.id, title: item.title, value: item.budget_value, status: item.status, projectName: item.projects?.[0]?.name || "Projeto" }))} expenses={expenses.filter((item) => item.stage_id === stage.id).map((item) => ({ id: item.id, title: item.description, value: item.approved_value, status: item.status, projectName: item.projects?.[0]?.name || "Projeto" }))} returnTo={returnTo} /></div> : null}
                   </article>
                 ))}
               </div>
@@ -237,7 +246,7 @@ export default async function StagesPage({
                       <TableHead>Ordem</TableHead>
                       <TableHead>Planejado</TableHead>
                       <TableHead>Status</TableHead>
-                      <TableHead className="text-right">Ações</TableHead>
+                      {canManage ? <TableHead className="text-right">Ações</TableHead> : null}
                     </TableRow>
                   </TableHeader>
                   <TableBody>
@@ -257,7 +266,7 @@ export default async function StagesPage({
                         <TableCell>
                           <Badge variant="secondary">{stage.status}</Badge>
                         </TableCell>
-                        <TableCell className="text-right"><StageEditDialog stage={stage} quotations={quotations.filter((item) => item.stage_id === stage.id).map((item) => ({ id: item.id, title: item.title, value: item.total_value, status: item.status, projectName: item.projects?.[0]?.name || "Projeto" }))} budgets={budgets.filter((item) => item.stage_id === stage.id).map((item) => ({ id: item.id, title: item.title, value: item.budget_value, status: item.status, projectName: item.projects?.[0]?.name || "Projeto" }))} expenses={expenses.filter((item) => item.stage_id === stage.id).map((item) => ({ id: item.id, title: item.description, value: item.approved_value, status: item.status, projectName: item.projects?.[0]?.name || "Projeto" }))} returnTo={returnTo} /></TableCell>
+                        {canManage ? <TableCell className="text-right"><StageEditDialog stage={stage} quotations={quotations.filter((item) => item.stage_id === stage.id).map((item) => ({ id: item.id, title: item.title, value: item.total_value, status: item.status, projectName: item.projects?.[0]?.name || "Projeto" }))} budgets={budgets.filter((item) => item.stage_id === stage.id).map((item) => ({ id: item.id, title: item.title, value: item.budget_value, status: item.status, projectName: item.projects?.[0]?.name || "Projeto" }))} expenses={expenses.filter((item) => item.stage_id === stage.id).map((item) => ({ id: item.id, title: item.description, value: item.approved_value, status: item.status, projectName: item.projects?.[0]?.name || "Projeto" }))} returnTo={returnTo} /></TableCell> : null}
                       </TableRow>
                     ))}
                   </TableBody>

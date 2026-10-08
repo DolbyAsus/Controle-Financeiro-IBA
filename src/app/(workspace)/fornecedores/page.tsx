@@ -4,7 +4,7 @@ import { createSupplier, linkSupplierToProject } from "@/lib/actions/base-regist
 import { SupplierEditDialog } from "@/components/suppliers/supplier-edit-dialog";
 import { RegisterPageShell } from "@/components/modules/register-page-shell";
 import { CreateRecordDialog } from "@/components/modules/create-record-dialog";
-import { Pagination, paginate } from "@/components/modules/pagination";
+import { Pagination, databasePage, paginationRange } from "@/components/modules/pagination";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import {
@@ -25,7 +25,7 @@ import {
 } from "@/components/ui/table";
 import { isSupabaseConfigured } from "@/lib/supabase/config";
 import { createClient } from "@/lib/supabase/server";
-import { getWorkspaceProfile } from "@/lib/project-access";
+import { getProjectWorkspaceAccess, getWorkspaceProfile } from "@/lib/project-access";
 
 export const dynamic = "force-dynamic";
 
@@ -39,7 +39,11 @@ export default async function SuppliersPage({
   const returnTo = projectId ? `/projetos/${projectId}/fornecedores` : undefined;
   const supabase = isSupabaseConfigured() ? await createClient() : null;
   const profile = supabase ? await getWorkspaceProfile() : null;
-  const canManageSuppliers = profile?.role === "admin";
+  const access = projectId && supabase ? await getProjectWorkspaceAccess(projectId) : null;
+  const canManageSuppliers = projectId
+    ? access?.projectRole === "admin" || access?.projectRole === "financeiro"
+    : profile?.role === "admin";
+  const pageRange = paginationRange(query.pagina);
   const categories = supabase
     ? ((
         await (projectId
@@ -54,27 +58,34 @@ export default async function SuppliersPage({
           .order("name"))
       ).data ?? [])
     : [];
-  const supplierLinks = supabase && projectId
-    ? ((await supabase.from("project_suppliers").select("supplier_id").eq("project_id", projectId).eq("status", "ativo")).data ?? [])
-    : [];
-  const linkedSupplierIds = supplierLinks.map((item) => item.supplier_id);
-  const allSuppliers = supabase
-    ? ((
-        await supabase
+  const suppliersResult = supabase
+    ? await (projectId
+        ? supabase
+          .from("suppliers")
+          .select(
+            "id, name, person_type, document, main_contact, phone, email, address, main_category_id, status, notes, categories(name), project_suppliers!inner(project_id, status)",
+            { count: "exact" },
+          )
+          .eq("project_suppliers.project_id", projectId)
+          .eq("project_suppliers.status", "ativo")
+        : supabase
           .from("suppliers")
           .select(
             "id, name, person_type, document, main_contact, phone, email, address, main_category_id, status, notes, categories(name)",
+            { count: "exact" },
           )
-          .order("name")
-      ).data ?? [])
+      )
+        .order("name")
+        .order("id")
+        .range(pageRange.from, pageRange.to)
+    : null;
+  const suppliers = suppliersResult?.data ?? [];
+  const unlinkedSuppliers = supabase && projectId && canManageSuppliers
+    ? ((await supabase.rpc("get_unlinked_project_suppliers", {
+        target_project_id: projectId,
+      })).data ?? [])
     : [];
-  const suppliers = projectId
-    ? allSuppliers.filter((supplier) => linkedSupplierIds.includes(supplier.id))
-    : allSuppliers;
-  const unlinkedSuppliers = projectId
-    ? allSuppliers.filter((supplier) => !linkedSupplierIds.includes(supplier.id) && supplier.status === "ativo")
-    : [];
-  const supplierPage = paginate(suppliers, query.pagina);
+  const supplierPage = databasePage(suppliers, suppliersResult?.count ?? 0, pageRange.page);
   const pageSupplierIds = supplierPage.items.map((supplier) => supplier.id);
   let linkedQuotations: {
     id: string; supplier_id: string; title: string; total_value: number | string; status: string; projects: { name: string }[] | null;
@@ -127,7 +138,7 @@ export default async function SuppliersPage({
       formTitle="Novo fornecedor"
       message={query.mensagem}
       error={query.erro}
-      form={
+      form={canManageSuppliers ? (
         <form action={createSupplier} className="grid gap-4 md:grid-cols-2">
           {projectId ? <><input name="projeto_id" type="hidden" value={projectId} /><input name="retorno" type="hidden" value={returnTo} /></> : null}
           <label className="grid gap-1.5 text-sm font-medium">
@@ -229,9 +240,9 @@ export default async function SuppliersPage({
             <Button type="submit">Salvar fornecedor</Button>
           </div>
         </form>
-      }
+      ) : null}
     >
-      {projectId ? (
+      {projectId && canManageSuppliers ? (
         <Card>
           <CardHeader>
             <CardTitle>Vincular fornecedor já cadastrado</CardTitle>
@@ -253,7 +264,7 @@ export default async function SuppliersPage({
                   Fornecedor disponível
                   <select className="h-9 rounded-lg border border-input bg-transparent px-3 text-sm" name="fornecedor_existente_id" required defaultValue="">
                     <option disabled value="">Selecione</option>
-                    {unlinkedSuppliers.map((supplier) => <option key={supplier.id} value={supplier.id}>{supplier.name}</option>)}
+                    {unlinkedSuppliers.map((supplier: { id: string; name: string }) => <option key={supplier.id} value={supplier.id}>{supplier.name}</option>)}
                   </select>
                 </label>
                 <div><Button type="submit">Vincular fornecedor</Button></div>
@@ -267,7 +278,7 @@ export default async function SuppliersPage({
         <CardHeader>
           <CardTitle>Fornecedores cadastrados</CardTitle>
           <CardDescription>
-            {suppliers.length} fornecedores disponíveis.
+            {supplierPage.count} fornecedores disponíveis.
           </CardDescription>
         </CardHeader>
         <CardContent>
@@ -300,6 +311,7 @@ export default async function SuppliersPage({
                           budgets={linkedBudgets.filter((item) => item.supplier_id === supplier.id).map((item) => ({ id: item.id, title: item.title, value: item.budget_value, status: item.status, projectName: item.projects?.[0]?.name || "Projeto" }))}
                           expenses={linkedExpenses.filter((item) => item.supplier_id === supplier.id).map((item) => ({ id: item.id, title: item.description, value: item.approved_value, status: item.status, projectName: item.projects?.[0]?.name || "Projeto" }))}
                           returnTo={returnTo}
+                          projectId={projectId}
                         />
                       </div>
                     ) : null}
@@ -343,6 +355,7 @@ export default async function SuppliersPage({
                               budgets={linkedBudgets.filter((item) => item.supplier_id === supplier.id).map((item) => ({ id: item.id, title: item.title, value: item.budget_value, status: item.status, projectName: item.projects?.[0]?.name || "Projeto" }))}
                               expenses={linkedExpenses.filter((item) => item.supplier_id === supplier.id).map((item) => ({ id: item.id, title: item.description, value: item.approved_value, status: item.status, projectName: item.projects?.[0]?.name || "Projeto" }))}
                               returnTo={returnTo}
+                              projectId={projectId}
                             />
                           </TableCell>
                         ) : null}

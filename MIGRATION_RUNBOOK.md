@@ -27,13 +27,42 @@ Migração-alvo:
 ## 2. Preflight no projeto hospedado
 
 1. Criar um backup recuperável ou confirmar um snapshot recente do banco.
-2. Executar `supabase/migration_preflight.sql` no SQL Editor, em modo somente
-   leitura.
-3. Investigar todo resultado marcado como `esperado: 0`.
-4. Registrar a quantidade de snapshots históricos de auditoria com campos
+2. Comparar o histórico antes de qualquer push:
+
+   ```powershell
+   npx --yes supabase@2.120.0 migration list --linked
+   npx --yes supabase@2.120.0 db push --linked --dry-run --include-all --skip-vault
+   ```
+
+   Se o remoto não registrar migrações antigas, não usar `--include-all` e não
+   executar `migration repair` apenas porque os nomes estão ausentes. Primeiro
+   comparar um banco-sombra construído até a última versão remota com o schema
+   hospedado. Só reparar o histórico depois de confirmar que as diferenças são
+   conhecidas, revisar funções e privilégios e garantir um backup recuperável.
+3. Executar `supabase/migration_preflight.sql` no SQL Editor ou pelo CLI. O
+   arquivo inicia uma transação `read only`, retorna um resumo anônimo como
+   último resultado e termina com `rollback`:
+
+   ```powershell
+   npx --yes supabase@2.120.0 db query --linked `
+     --file supabase/migration_preflight.sql --output json
+   ```
+
+4. Investigar todo resultado marcado como `esperado: 0`. Não corrigir vínculos
+   inválidos escolhendo automaticamente outro projeto, categoria, etapa ou
+   fornecedor: a relação correta é uma decisão de negócio.
+5. Registrar a quantidade de snapshots históricos de auditoria com campos
    sensíveis. A migração bloqueia esses JSONs para `authenticated` e redige
    eventos futuros, mas uma limpeza retroativa deve ser aprovada como decisão
    de retenção porque elimina parte do histórico.
+6. Exigir lint e advisors remotos sem achados de segurança pendentes. A proteção
+   contra senhas vazadas deve estar habilitada no Auth antes do go-live:
+
+   ```powershell
+   npx --yes supabase@2.120.0 db lint --linked --level error --fail-on error
+   npx --yes supabase@2.120.0 db advisors --linked `
+     --type all --level warn --fail-on warn
+   ```
 
 ## 3. Implantação coordenada
 

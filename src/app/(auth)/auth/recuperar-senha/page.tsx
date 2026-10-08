@@ -20,6 +20,7 @@ import {
   getPasswordRecoveryUrl,
   isSupabaseConfigured,
 } from "@/lib/supabase/config";
+import { getRecoveryRequestErrorMessage } from "@/lib/auth-flow";
 
 export default function RecoverPasswordPage() {
   const searchParams = useSearchParams();
@@ -45,7 +46,7 @@ export default function RecoverPasswordPage() {
     setLoading(false);
     turnstileRef.current?.reset();
     if (recoveryError) {
-      setError("Não foi possível enviar o link agora. Tente novamente.");
+      setError(getRecoveryRequestErrorMessage(recoveryError));
       return;
     }
     setSent(true);

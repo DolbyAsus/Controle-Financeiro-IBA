@@ -76,6 +76,9 @@ sequência, salvo mudança de prioridade da Igreja Batista da Aliança.
   cadastro público permanece desativado.
 - A conta administrativa geral já existe. As contas temporárias da matriz de
   perfis ainda devem ser criadas separadamente e excluídas após a validação.
+- O provedor de e-mail padrão do Supabase limita o projeto a 2 mensagens de
+  autenticação por hora. Antes da operação real, configurar SMTP próprio e
+  homologar convites e recuperação contra scanners de links do provedor.
 - TOTP está disponível no Supabase, mas ainda precisa ter seu fluxo de
   cadastramento, desafio e recuperação homologado na interface antes de ser
   exigido como segundo fator obrigatório.

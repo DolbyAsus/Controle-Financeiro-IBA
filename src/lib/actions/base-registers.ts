@@ -5,7 +5,13 @@ import { redirect } from "next/navigation";
 
 import type { UserRole } from "@/lib/navigation";
 import { isPaymentDateAllowed, paymentDateWindow } from "@/lib/payment-date";
+import { createAdminClient } from "@/lib/supabase/admin";
+import { getAuthCallbackUrl } from "@/lib/supabase/config";
 import { createClient } from "@/lib/supabase/server";
+import {
+  getInvitationErrorMessage,
+  normalizeInvitationInput,
+} from "@/lib/user-invitations";
 
 type ProfileContext = { id: string; churchId: string; role: UserRole };
 
@@ -838,6 +844,86 @@ export async function manageUserProfile(formData: FormData) {
     revalidatePath("/historico");
   } catch (error) { fail("/usuarios", error); }
   redirect("/usuarios?mensagem=Perfil+atualizado+com+sucesso.");
+}
+
+export async function inviteUser(formData: FormData) {
+  const requestedProjectId = readText(formData, "projeto_id");
+  const projectId =
+    requestedProjectId &&
+    /^[0-9a-f]{8}-(?:[0-9a-f]{4}-){3}[0-9a-f]{12}$/i.test(
+      requestedProjectId,
+    )
+      ? requestedProjectId
+      : null;
+  const returnTo = returnPath(
+    formData,
+    projectId ? `/projetos/${projectId}/usuarios` : "/usuarios",
+  );
+
+  try {
+    if (requestedProjectId && !projectId)
+      throw new Error("Projeto inválido para este convite.");
+    if (projectId) await currentProjectProfile(["admin"], projectId);
+    else await currentProfile(["admin"]);
+
+    const invitation = normalizeInvitationInput({
+      name: readText(formData, "nome", true)!,
+      email: readText(formData, "email", true)!,
+      role: readText(
+        formData,
+        projectId ? "funcao_projeto" : "funcao",
+        true,
+      )!,
+    });
+    const admin = createAdminClient();
+    const { data, error: inviteError } =
+      await admin.auth.admin.inviteUserByEmail(invitation.email, {
+        data: { name: invitation.name },
+        redirectTo: getAuthCallbackUrl(),
+      });
+
+    if (inviteError) throw new Error(getInvitationErrorMessage(inviteError));
+    if (!data.user?.id)
+      throw new Error("O serviço de autenticação não confirmou o convite.");
+
+    try {
+      const supabase = await createClient();
+      const { error } = projectId
+        ? await supabase.rpc("manage_project_membership", {
+            target_project_id: projectId,
+            target_user_id: data.user.id,
+            target_role: invitation.role,
+            target_status: "ativo",
+          })
+        : invitation.role !== "visualizador"
+          ? await supabase.rpc("manage_user_profile", {
+              target_user_id: data.user.id,
+              target_role: invitation.role,
+              target_status: "ativo",
+            })
+          : { error: null };
+      const message = databaseMessage(error);
+      if (message) throw new Error(message);
+    } catch (error) {
+      const { error: cleanupError } = await admin.auth.admin.deleteUser(
+        data.user.id,
+      );
+      if (cleanupError)
+        throw new Error(
+          "O convite foi enviado, mas o acesso não pôde ser concluído. Avise o administrador antes de tentar novamente.",
+        );
+      throw error;
+    }
+
+    revalidatePath("/usuarios");
+    revalidatePath("/selecionar-projeto");
+    revalidatePath("/historico");
+    if (projectId) revalidateProjectContext(returnTo);
+  } catch (error) {
+    fail(returnTo, error);
+  }
+
+  redirect(`${returnTo}?mensagem=Convite+enviado+com+sucesso.`);
 }
 
 export async function manageProjectMembership(formData: FormData) {

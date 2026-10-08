@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { type FormEvent, useState } from "react";
 import { Building2, Pencil, ReceiptText, WalletCards, Landmark } from "lucide-react";
 
 import { updateSupplier } from "@/lib/actions/base-registers";
@@ -126,6 +126,21 @@ export function SupplierEditDialog({
   returnTo,
   projectId,
 }: Props) {
+  const [status, setStatus] = useState(supplier.status);
+  const quotationsInReview = quotations.filter((item) => item.status === "em_analise").length;
+
+  function confirmDeactivation(event: FormEvent<HTMLFormElement>) {
+    if (supplier.status !== "ativo" || status === "ativo" || quotationsInReview === 0) return;
+
+    const quotationLabel = quotationsInReview === 1 ? "cotação em análise" : "cotações em análise";
+    const actionLabel = status === "bloqueado" ? "bloquear" : "desativar";
+    const confirmed = window.confirm(
+      `Ao ${actionLabel} este fornecedor, ${quotationsInReview} ${quotationLabel} será${quotationsInReview === 1 ? "" : "ão"} rejeitada${quotationsInReview === 1 ? "" : "s"} automaticamente. Deseja continuar?`,
+    );
+
+    if (!confirmed) event.preventDefault();
+  }
+
   return (
     <Dialog>
       <DialogTrigger render={<Button size="sm" variant="outline" />}>
@@ -143,7 +158,7 @@ export function SupplierEditDialog({
           </DialogDescription>
         </DialogHeader>
         <DialogBody className="space-y-6">
-          <form action={updateSupplier} className="grid gap-3 md:grid-cols-2">
+          <form action={updateSupplier} className="grid gap-3 md:grid-cols-2" onSubmit={confirmDeactivation}>
             <input name="fornecedor_id" type="hidden" value={supplier.id} />
             {projectId ? <input name="projeto_id" type="hidden" value={projectId} /> : null}
             {returnTo ? <input name="retorno" type="hidden" value={returnTo} /> : null}
@@ -189,7 +204,7 @@ export function SupplierEditDialog({
             </label>
             <label className="grid gap-1 text-sm font-medium">
               Status *
-              <select className="h-9 rounded-lg border border-input bg-background px-3" name="status" defaultValue={supplier.status}>
+              <select className="h-9 rounded-lg border border-input bg-background px-3" name="status" value={status} onChange={(event) => setStatus(event.target.value)}>
                 <option value="ativo">Ativo</option>
                 <option value="inativo">Inativo</option>
                 <option value="bloqueado">Bloqueado</option>

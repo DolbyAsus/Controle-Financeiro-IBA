@@ -1,7 +1,9 @@
 # Runbook da migração de segurança
 
-Migração-alvo:
-`supabase/migrations/20261007194900_harden_tenant_finance_and_audit.sql`.
+Migrações-alvo:
+
+- `supabase/migrations/20261007194900_harden_tenant_finance_and_audit.sql`;
+- `supabase/migrations/20261008060522_reject_quotations_on_supplier_deactivation.sql`.
 
 ## 1. Validação local após reiniciar o Windows
 
@@ -55,6 +57,10 @@ Migração-alvo:
    sensíveis. A migração bloqueia esses JSONs para `authenticated` e redige
    eventos futuros, mas uma limpeza retroativa deve ser aprovada como decisão
    de retenção porque elimina parte do histórico.
+
+   Decisão registrada em 2026-10-08: preservar os snapshots históricos sob o
+   novo bloqueio de coluna. Não executar limpeza retroativa nesta implantação.
+
 6. Exigir lint e advisors remotos sem achados de segurança pendentes. A proteção
    contra senhas vazadas deve estar habilitada no Auth antes do go-live:
 
@@ -86,6 +92,9 @@ Validar com contas separadas, sem reutilizar a mesma sessão:
 - administrador/financeiro de um projeto não altera outro projeto;
 - visualizador não grava fornecedores, cotações ou finanças;
 - criação e edição de fornecedor mantêm o vínculo com o projeto;
+- ao desativar ou bloquear fornecedor, a interface pede confirmação e todas as
+  cotações em análise desse fornecedor são rejeitadas na mesma transação, com
+  justificativa, responsável e horário;
 - edição de cotação aceita apenas etapa, categoria e fornecedor ativos;
 - pagamentos parciais recalculam saldo e status da despesa;
 - dashboard e relatório mensal conciliam com consultas SQL de controle;

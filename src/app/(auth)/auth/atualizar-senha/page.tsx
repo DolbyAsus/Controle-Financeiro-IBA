@@ -18,6 +18,8 @@ import { Input } from "@/components/ui/input";
 import { createClient } from "@/lib/supabase/client";
 import { isSupabaseConfigured } from "@/lib/supabase/config";
 
+const PASSWORD_SYMBOLS = "!@#$%^&*()_+-=[]{};'\\:\"|<>?,./`~";
+
 export default function UpdatePasswordPage() {
   const router = useRouter();
   const [password, setPassword] = useState("");
@@ -29,7 +31,8 @@ export default function UpdatePasswordPage() {
     password.length >= 10 &&
     /[a-z]/.test(password) &&
     /[A-Z]/.test(password) &&
-    /\d/.test(password);
+    /\d/.test(password) &&
+    [...PASSWORD_SYMBOLS].some((symbol) => password.includes(symbol));
   useEffect(() => {
     if (!isSupabaseConfigured()) {
       router.replace("/login");
@@ -56,7 +59,7 @@ export default function UpdatePasswordPage() {
     event.preventDefault();
     if (!isStrongPassword) {
       setError(
-        "Use ao menos 10 caracteres, com letra maiúscula, minúscula e número.",
+        "Use ao menos 10 caracteres, com letra maiúscula, minúscula, número e símbolo.",
       );
       return;
     }
@@ -99,7 +102,7 @@ export default function UpdatePasswordPage() {
           <CardTitle>Definir nova senha</CardTitle>
           <CardDescription>
             Use ao menos 10 caracteres, com letras maiúsculas, minúsculas e
-            números.
+            números, além de um símbolo.
           </CardDescription>
         </CardHeader>
         <CardContent>

@@ -14,8 +14,9 @@ sequência, salvo mudança de prioridade da Igreja Batista da Aliança.
 - Definição de destinatário, aprovação financeira, despesas originadas de
   orçamento ou lançamento manual e pagamentos parciais vinculados à despesa.
 - Entradas, dashboard, relatório mensal visual e histórico de auditoria.
-- Contas, sessões e dados operacionais de teste removidos antes da homologação;
-  o ambiente hospedado está intencionalmente sem usuário administrador.
+- Contas, sessões e dados operacionais de teste removidos antes da homologação.
+- Primeiro Administrador criado pelo fluxo de convite do Supabase, com perfil
+  geral ativo na Igreja Batista da Aliança e sem vínculo limitado a projeto.
 - Produção publicada no domínio oficial da Vercel, integrada ao GitHub.
 - Revisão de segurança aplicada: cadastro público bloqueado, perfis restritos,
   transições financeiras protegidas por funções/gatilhos e links limitados ao
@@ -62,11 +63,10 @@ sequência, salvo mudança de prioridade da Igreja Batista da Aliança.
 
 | Ordem | Etapa | Critério de conclusão | Sugestão após concluir |
 | --- | --- | --- | --- |
-| 1 | Criar o primeiro Administrador | Criar conta pelo fluxo administrativo do Supabase e promover o perfil inicial de forma controlada. | Criar contas temporárias por papel. |
-| 2 | Matriz manual de perfis | Confirmar isolamento com contas separadas de Administrador, Financeiro, Comissão, Visualizador e Administrador de projeto. | Testar ponta a ponta. |
-| 3 | Testes ponta a ponta e responsividade | Validar fluxos completos em desktop, tablet e celular e excluir novamente as contas/dados temporários. | Homologar com a comissão. |
-| 4 | Homologação com a comissão | Cadastrar dados reais controlados e obter aceite sobre telas, valores e regras. | Iniciar operação assistida. |
-| 5 | Operação assistida | Acompanhar os primeiros lançamentos e registrar melhorias priorizadas. | Planejar evolução seguinte. |
+| 1 | Matriz manual de perfis | Confirmar isolamento com contas separadas de Administrador, Financeiro, Comissão, Visualizador e Administrador de projeto. | Testar ponta a ponta. |
+| 2 | Testes ponta a ponta e responsividade | Validar fluxos completos em desktop, tablet e celular e excluir novamente as contas/dados temporários. | Homologar com a comissão. |
+| 3 | Homologação com a comissão | Cadastrar dados reais controlados e obter aceite sobre telas, valores e regras. | Iniciar operação assistida. |
+| 4 | Operação assistida | Acompanhar os primeiros lançamentos e registrar melhorias priorizadas. | Planejar evolução seguinte. |
 
 ## Dependências e riscos
 
@@ -74,9 +74,8 @@ sequência, salvo mudança de prioridade da Igreja Batista da Aliança.
 - Não usar chave secreta do Supabase no frontend ou em arquivos versionados.
 - Convites e criação de usuários devem continuar centralizados no Supabase; o
   cadastro público permanece desativado.
-- O ambiente está sem conta administrativa. Antes do uso funcional, criar o
-  primeiro Administrador e executar a matriz manual de perfis; até lá, o login
-  não concede acesso operacional a ninguém.
+- A conta administrativa geral já existe. As contas temporárias da matriz de
+  perfis ainda devem ser criadas separadamente e excluídas após a validação.
 - TOTP está disponível no Supabase, mas ainda precisa ter seu fluxo de
   cadastramento, desafio e recuperação homologado na interface antes de ser
   exigido como segundo fator obrigatório.
@@ -89,6 +88,6 @@ sequência, salvo mudança de prioridade da Igreja Batista da Aliança.
 
 ## Próxima sugestão ativa
 
-**Banco e aplicação promovidos. Próxima ação — bootstrap administrativo.**
-Criar o primeiro Administrador de forma controlada e iniciar a matriz manual
-com uma conta separada para cada papel antes de inserir dados reais.
+**Bootstrap administrativo concluído. Próxima ação — matriz manual de perfis.**
+Criar uma conta temporária separada para cada papel, validar o isolamento e
+excluir novamente essas contas e seus dados antes de inserir dados reais.

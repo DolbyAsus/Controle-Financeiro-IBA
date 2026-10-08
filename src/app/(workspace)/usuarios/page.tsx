@@ -9,6 +9,7 @@ import {
 } from "@/components/modules/pagination";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
+import { UserInviteDialog } from "@/components/users/user-invite-dialog";
 import {
   Card,
   CardContent,
@@ -84,15 +85,18 @@ export default async function UsersPage({
   });
   return (
     <div className="space-y-6">
-      <section>
-        <p className="text-sm font-medium text-primary">Acessos</p>
-        <h1 className="mt-1 text-2xl font-semibold tracking-tight sm:text-3xl">
-        Usuários globais
-        </h1>
-        <p className="mt-1 text-sm text-muted-foreground">
-          Gerencie os perfis globais e consulte os vínculos de cada pessoa nos
-          projetos. A concessão de acesso é feita dentro da equipe de cada projeto.
-        </p>
+      <section className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
+        <div>
+          <p className="text-sm font-medium text-primary">Acessos</p>
+          <h1 className="mt-1 text-2xl font-semibold tracking-tight sm:text-3xl">
+            Usuários globais
+          </h1>
+          <p className="mt-1 max-w-3xl text-sm text-muted-foreground">
+            Convide novos usuários, gerencie os perfis globais e consulte os
+            vínculos de cada pessoa nos projetos.
+          </p>
+        </div>
+        <UserInviteDialog scope="global" />
       </section>
       {query.mensagem ? (
         <p

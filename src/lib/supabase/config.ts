@@ -18,7 +18,7 @@ export function getSupabaseEnvironment() {
   return { url, key };
 }
 
-export function getPasswordRecoveryUrl() {
+export function getAuthCallbackUrl() {
   const configuredOrigin = process.env.NEXT_PUBLIC_SITE_URL?.trim();
   const browserOrigin =
     typeof window === "undefined" ? undefined : window.location.origin;
@@ -34,4 +34,8 @@ export function getPasswordRecoveryUrl() {
   if (url.protocol !== "https:" && !isLocalHttp)
     throw new Error("A URL da aplicação precisa usar HTTPS.");
   return `${url.origin}/auth/callback`;
+}
+
+export function getPasswordRecoveryUrl() {
+  return getAuthCallbackUrl();
 }

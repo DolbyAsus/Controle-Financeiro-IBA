@@ -9,6 +9,7 @@ import {
   paginationRange,
 } from "@/components/modules/pagination";
 import { ProjectUserAccessDialog, type ProjectUserAccess } from "@/components/users/project-user-access-dialog";
+import { UserInviteDialog } from "@/components/users/user-invite-dialog";
 import { getProjectWorkspaceAccess } from "@/lib/project-access";
 import { isSupabaseConfigured } from "@/lib/supabase/config";
 import { createClient } from "@/lib/supabase/server";
@@ -107,16 +108,23 @@ export default async function ProjectUsersPage({
 
   return (
     <div className="space-y-6">
-      <section>
-        <p className="text-sm font-medium text-primary">Acessos do projeto</p>
-        <h1 className="mt-1 text-2xl font-semibold tracking-tight sm:text-3xl">
-          Equipe do projeto
-        </h1>
-        <p className="mt-1 max-w-3xl text-sm text-muted-foreground">
-          {isGlobalAdmin
-            ? "Como Administrador geral, você pode conceder, editar e inativar acessos deste projeto."
-            : "Como Administrador do projeto, você pode editar somente os acessos já vinculados a esta equipe."}
-        </p>
+      <section className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
+        <div>
+          <p className="text-sm font-medium text-primary">Acessos do projeto</p>
+          <h1 className="mt-1 text-2xl font-semibold tracking-tight sm:text-3xl">
+            Equipe do projeto
+          </h1>
+          <p className="mt-1 max-w-3xl text-sm text-muted-foreground">
+            {isGlobalAdmin
+              ? "Como Administrador geral, você pode convidar, conceder, editar e inativar acessos deste projeto."
+              : "Como Administrador do projeto, você pode convidar novos usuários e editar os acessos desta equipe."}
+          </p>
+        </div>
+        <UserInviteDialog
+          scope="project"
+          projectId={projectId}
+          projectName={access.project.name}
+        />
       </section>
 
       {query.mensagem ? (
@@ -139,14 +147,14 @@ export default async function ProjectUsersPage({
           <CardDescription>
             {isGlobalAdmin
               ? `${userPage.count} usuários cadastrados na igreja. ${visibleMembers} já estão vinculados a este projeto.`
-              : `${visibleMembers} usuários vinculados a este projeto. A inclusão de novos usuários é feita pelo Administrador geral.`}
+              : `${visibleMembers} usuários vinculados a este projeto.`}
           </CardDescription>
         </CardHeader>
         <CardContent className="space-y-3">
           {userPage.count === 0 ? (
             <p className="py-6 text-sm text-muted-foreground">
               {isGlobalAdmin
-                ? "Nenhum usuário está disponível para vincular. Crie ou convide a pessoa no Supabase e ela aparecerá aqui."
+                ? "Nenhum usuário está disponível. Convide a primeira pessoa para este projeto."
                 : "Não há usuários vinculados a este projeto."}
             </p>
           ) : (

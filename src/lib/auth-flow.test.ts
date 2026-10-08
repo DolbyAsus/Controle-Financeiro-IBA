@@ -109,6 +109,9 @@ describe("getRecoveryRequestErrorMessage", () => {
         status: 429,
       }),
     ).toContain("limite temporário");
+    expect(
+      getRecoveryRequestErrorMessage({ code: "email_provider_disabled" }),
+    ).toContain("administrador");
     expect(getRecoveryRequestErrorMessage({ code: "unknown" })).toContain(
       "Tente novamente",
     );

@@ -1,10 +1,60 @@
 import { describe, expect, it } from "vitest";
 
 import {
+  getSafeEmailConfirmationAction,
   getImplicitCallbackCredentials,
   getRecoveryRequestErrorMessage,
   hasAuthCallbackError,
 } from "./auth-flow";
+
+describe("getSafeEmailConfirmationAction", () => {
+  const supabaseUrl = "https://project-ref.supabase.co";
+  const confirmationUrl =
+    "https://project-ref.supabase.co/auth/v1/verify?token=secret&type=recovery&redirect_to=https%3A%2F%2Fapp.test%2Fauth%2Fcallback";
+
+  it("aceita somente o link de verificação esperado, bruto ou codificado", () => {
+    expect(
+      getSafeEmailConfirmationAction(
+        `#confirmation_url=${confirmationUrl}`,
+        supabaseUrl,
+      ),
+    ).toEqual({ type: "recovery", url: confirmationUrl });
+
+    expect(
+      getSafeEmailConfirmationAction(
+        `#confirmation_url=${encodeURIComponent(confirmationUrl)}`,
+        supabaseUrl,
+      ),
+    ).toEqual({ type: "recovery", url: confirmationUrl });
+  });
+
+  it("rejeita origem, rota, tipo ou token inesperados", () => {
+    expect(
+      getSafeEmailConfirmationAction(
+        "#confirmation_url=https://evil.test/auth/v1/verify?token=x&type=invite",
+        supabaseUrl,
+      ),
+    ).toBeNull();
+    expect(
+      getSafeEmailConfirmationAction(
+        "#confirmation_url=https://project-ref.supabase.co/other?token=x&type=invite",
+        supabaseUrl,
+      ),
+    ).toBeNull();
+    expect(
+      getSafeEmailConfirmationAction(
+        "#confirmation_url=https://project-ref.supabase.co/auth/v1/verify?token=x&type=magiclink",
+        supabaseUrl,
+      ),
+    ).toBeNull();
+    expect(
+      getSafeEmailConfirmationAction(
+        "#confirmation_url=https://project-ref.supabase.co/auth/v1/verify?type=invite",
+        supabaseUrl,
+      ),
+    ).toBeNull();
+  });
+});
 
 describe("getImplicitCallbackCredentials", () => {
   it.each(["invite", "recovery"])(

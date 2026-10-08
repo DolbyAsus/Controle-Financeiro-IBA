@@ -1,9 +1,66 @@
 const ACCEPTED_CALLBACK_TYPES = new Set(["invite", "recovery"]);
+const EMAIL_CONFIRMATION_HASH_PREFIX = "#confirmation_url=";
 
 type AuthErrorLike = {
   code?: string;
   status?: number;
 };
+
+export type EmailConfirmationType = "invite" | "recovery";
+
+export type EmailConfirmationAction = {
+  type: EmailConfirmationType;
+  url: string;
+};
+
+function decodeUrlCandidate(value: string) {
+  try {
+    return decodeURIComponent(value);
+  } catch {
+    return value;
+  }
+}
+
+export function getSafeEmailConfirmationAction(
+  hash: string,
+  supabaseUrl: string,
+): EmailConfirmationAction | null {
+  if (!hash.startsWith(EMAIL_CONFIRMATION_HASH_PREFIX)) return null;
+
+  try {
+    const expectedOrigin = new URL(supabaseUrl).origin;
+    const hashValue = hash.slice(EMAIL_CONFIRMATION_HASH_PREFIX.length);
+    const candidates = [hashValue, decodeUrlCandidate(hashValue)];
+
+    for (const candidate of candidates) {
+      try {
+        const url = new URL(candidate);
+        const type = url.searchParams.get("type");
+        const hasToken = Boolean(
+          url.searchParams.get("token") || url.searchParams.get("token_hash"),
+        );
+
+        if (
+          url.origin === expectedOrigin &&
+          url.pathname === "/auth/v1/verify" &&
+          type &&
+          ACCEPTED_CALLBACK_TYPES.has(type) &&
+          hasToken
+        )
+          return {
+            type: type as EmailConfirmationType,
+            url: url.toString(),
+          };
+      } catch {
+        continue;
+      }
+    }
+  } catch {
+    return null;
+  }
+
+  return null;
+}
 
 export function getImplicitCallbackCredentials(hash: string) {
   const params = new URLSearchParams(hash.startsWith("#") ? hash.slice(1) : hash);

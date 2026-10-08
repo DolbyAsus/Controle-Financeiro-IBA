@@ -97,5 +97,8 @@ export function getRecoveryRequestErrorMessage(error: AuthErrorLike) {
   if (error.code === "over_email_send_rate_limit" || error.status === 429)
     return "O limite temporário de e-mails foi atingido. Aguarde até uma hora e tente novamente.";
 
+  if (error.code === "email_provider_disabled")
+    return "A recuperação por e-mail está temporariamente indisponível. Avise o administrador.";
+
   return "Não foi possível enviar o link agora. Tente novamente.";
 }
